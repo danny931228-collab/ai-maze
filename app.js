@@ -9,37 +9,37 @@
       id: "bfs",
       name: "BFS 廣度優先",
       fullName: "BFS 廣度優先搜尋",
+      dsName: "佇列 (Queue)",
       dotClass: "algo-bfs",
-      exploredFill: "rgba(56, 189, 248, 0.25)",
-      exploredStroke: "rgba(56, 189, 248, 0.45)",
-      frontierFill: "rgba(244, 114, 182, 0.72)",
-      headColor: "#f472b6",
-      pathColor: "#fde047",
-      pathGlow: "rgba(253, 224, 71, 0.75)"
+      exploredFill: "rgba(56, 189, 248, 0.26)",
+      frontierFill: "rgba(251, 191, 36, 0.78)",
+      headColor: "#fbbf24",
+      pathColor: "#facc15",
+      pathGlow: "rgba(250, 204, 21, 0.75)"
     },
     dfs: {
       id: "dfs",
       name: "DFS 深度優先",
       fullName: "DFS 深度優先搜尋",
+      dsName: "堆疊 (Stack)",
       dotClass: "algo-dfs",
-      exploredFill: "rgba(192, 132, 252, 0.25)",
-      exploredStroke: "rgba(192, 132, 252, 0.45)",
-      frontierFill: "rgba(251, 146, 60, 0.75)",
-      headColor: "#fb923c",
+      exploredFill: "rgba(251, 113, 133, 0.25)",
+      frontierFill: "rgba(251, 191, 36, 0.78)",
+      headColor: "#fbbf24",
       pathColor: "#f472b6",
       pathGlow: "rgba(244, 114, 182, 0.75)"
     },
     astar: {
       id: "astar",
-      name: "A* 星演算法",
-      fullName: "A* 星演算法",
+      name: "A* 搜尋演算法",
+      fullName: "A* 搜尋演算法",
+      dsName: "優先佇列 (Min-Heap)",
       dotClass: "algo-astar",
-      exploredFill: "rgba(52, 211, 153, 0.24)",
-      exploredStroke: "rgba(52, 211, 153, 0.45)",
+      exploredFill: "rgba(52, 211, 153, 0.25)",
       frontierFill: "rgba(56, 189, 248, 0.78)",
       headColor: "#38bdf8",
-      pathColor: "#fde047",
-      pathGlow: "rgba(253, 224, 71, 0.85)"
+      pathColor: "#facc15",
+      pathGlow: "rgba(250, 204, 21, 0.8)"
     }
   };
 
@@ -50,44 +50,49 @@
     { key: "left", dr: 0, dc: -1, opp: "right" }
   ];
 
+  const SWAMP_COST = 5;
+  const BEST_RECORD_KEY = "maze_lab_g2_best_records_v1";
+
   // =========================================================================
   // Application State
   // =========================================================================
   const state = {
     mode: "ai", // "ai" | "manual"
     size: 20,
+    preset: "random", // "random" | "utrap" | "swamp"
+    seed: 2026,
     grid: [],
+
     selectedAlgo: "astar",
     speed: 50,
+    brush: "none", // "none" | "wall" | "swamp" | "clear"
+    isPainting: false,
 
-    // Playback / Animation
+    // View & Playback
+    viewMode: "single", // "single" | "race"
     animStatus: "idle", // "idle" | "running" | "paused" | "finished"
     isRacing: false,
-    raceQueue: [],
-    raceIndex: 0,
     raceResults: [],
-    raceTimerId: null,
     selectedLeaderboardAlgo: null,
 
-    activeResult: null,
+    // Single trace state
     activeAlgoId: "astar",
-    exploredStepCursor: 0,
-    pathStepCursor: 0,
+    activeResult: null,
+    singleTrack: null,
+
+    // Simultaneous 3-way race tracks
+    raceTracks: null,
+
     stepAccumulator: 0,
     lastFrameTime: 0,
     rafId: null,
-
-    // Visual subsets for current animation frame
-    exploredCells: [],
-    exploredSet: new Set(),
-    frontierSet: new Set(),
-    currentHeadKey: null,
 
     // Manual Challenge State
     manual: {
       r: 0,
       c: 0,
       steps: 0,
+      cost: 0,
       trail: [{ r: 0, c: 0 }],
       visitedSet: new Set(["0,0"]),
       started: false,
@@ -104,11 +109,43 @@
   // DOM References
   // =========================================================================
   const dom = {
+    appShell: document.querySelector(".app-shell"),
     canvas: document.getElementById("mazeCanvas"),
     canvasWrapper: document.getElementById("canvasWrapper"),
+    raceGrid: document.getElementById("raceGrid"),
+    raceViewSwitch: document.getElementById("raceViewSwitch"),
+    raceReplayBtn: document.getElementById("raceReplayBtn"),
+    racePauseBtn: document.getElementById("racePauseBtn"),
+    raceSkipBarBtn: document.getElementById("raceSkipBarBtn"),
+    raceSpeedSlider: document.getElementById("raceSpeedSlider"),
+    raceSpeedBadge: document.getElementById("raceSpeedBadge"),
+    backToSingleBtn: document.getElementById("backToSingleBtn"),
+    raceCanvases: {
+      bfs: document.getElementById("raceCanvasBfs"),
+      dfs: document.getElementById("raceCanvasDfs"),
+      astar: document.getElementById("raceCanvasAstar")
+    },
+    raceStats: {
+      bfs: document.getElementById("raceStatBfs"),
+      dfs: document.getElementById("raceStatDfs"),
+      astar: document.getElementById("raceStatAstar")
+    },
+    raceFoots: {
+      bfs: document.getElementById("raceFootBfs"),
+      dfs: document.getElementById("raceFootDfs"),
+      astar: document.getElementById("raceFootAstar")
+    },
+    raceCards: document.querySelectorAll(".race-card"),
+
     statusPill: document.getElementById("statusPill"),
     statusText: document.getElementById("statusText"),
     mazeMeta: document.getElementById("mazeMeta"),
+    mazeSeedMeta: document.getElementById("mazeSeedMeta"),
+    insightText: document.getElementById("insightText"),
+
+    editorToolbar: document.getElementById("editorToolbar"),
+    brushBtns: document.querySelectorAll(".brush-btn"),
+    clearCustomBtn: document.getElementById("clearCustomBtn"),
 
     modeAiBtn: document.getElementById("modeAiBtn"),
     modeManualBtn: document.getElementById("modeManualBtn"),
@@ -132,6 +169,10 @@
     legendOptimal: document.getElementById("legendOptimal"),
 
     sizeBtns: document.querySelectorAll(".seg-btn"),
+    presetBtns: document.querySelectorAll(".preset-btn"),
+    seedInput: document.getElementById("seedInput"),
+    loadSeedBtn: document.getElementById("loadSeedBtn"),
+    copyShareBtn: document.getElementById("copyShareBtn"),
     generateMazeBtn: document.getElementById("generateMazeBtn"),
 
     aiControlsPanel: document.getElementById("aiControlsPanel"),
@@ -150,6 +191,8 @@
     raceStatusBadge: document.getElementById("raceStatusBadge"),
     leaderboardBody: document.getElementById("leaderboardBody"),
 
+    bestRecordSize: document.getElementById("bestRecordSize"),
+    bestRecordText: document.getElementById("bestRecordText"),
     dpadBtns: document.querySelectorAll(".dpad-btn"),
     manualResetBtn: document.getElementById("manualResetBtn"),
     manualResultCard: document.getElementById("manualResultCard"),
@@ -163,16 +206,42 @@
     toggleOptimalPathBtn: document.getElementById("toggleOptimalPathBtn")
   };
 
-  const ctx = dom.canvas.getContext("2d");
-
   // =========================================================================
-  // Utility Helpers
+  // Seeded PRNG & Utilities
   // =========================================================================
   const cellKey = (r, c) => `${r},${c}`;
 
-  function shuffle(arr) {
+  function createRng(seed) {
+    let a = (seed >>> 0) || 1;
+    return function () {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hashSeedText(raw) {
+    const cleaned = String(raw || "").trim().toUpperCase().replace(/^G2-/, "");
+    if (/^\d+$/.test(cleaned)) {
+      return Math.max(1, Number(cleaned) % 999999);
+    }
+    let h = 2166136261;
+    for (let i = 0; i < cleaned.length; i++) {
+      h ^= cleaned.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) % 999999 || 1001;
+  }
+
+  function randomSeed() {
+    return 1000 + Math.floor(Math.random() * 9000);
+  }
+
+  function shuffle(arr, rng) {
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rng() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
@@ -190,10 +259,14 @@
     if (visualState === "paused") dom.statusPill.classList.add("paused");
   }
 
+  function setInsight(text) {
+    dom.insightText.textContent = text;
+  }
+
   // =========================================================================
-  // Maze Generation (Iterative Recursive Backtracker + Controlled Braiding)
+  // Maze & Preset Generation
   // =========================================================================
-  function createEmptyGrid(n) {
+  function createEmptyGrid(n, openAll = false) {
     const grid = [];
     for (let r = 0; r < n; r++) {
       const row = [];
@@ -201,7 +274,13 @@
         row.push({
           r,
           c,
-          walls: { top: true, right: true, bottom: true, left: true }
+          type: "normal", // "normal" | "wall" | "swamp"
+          walls: {
+            top: openAll ? r === 0 : true,
+            right: openAll ? c === n - 1 : true,
+            bottom: openAll ? r === n - 1 : true,
+            left: openAll ? c === 0 : true
+          }
         });
       }
       grid.push(row);
@@ -209,8 +288,9 @@
     return grid;
   }
 
-  function generateMaze(n) {
-    const grid = createEmptyGrid(n);
+  function generateRandomMaze(n, seed) {
+    const rng = createRng(seed);
+    const grid = createEmptyGrid(n, false);
     const visited = Array.from({ length: n }, () => Array(n).fill(false));
     const stack = [{ r: 0, c: 0 }];
     visited[0][0] = true;
@@ -230,7 +310,7 @@
       if (neighbors.length === 0) {
         stack.pop();
       } else {
-        const chosen = neighbors[Math.floor(Math.random() * neighbors.length)];
+        const chosen = neighbors[Math.floor(rng() * neighbors.length)];
         grid[curr.r][curr.c].walls[chosen.dir.key] = false;
         grid[chosen.nr][chosen.nc].walls[chosen.dir.opp] = false;
         visited[chosen.nr][chosen.nc] = true;
@@ -238,38 +318,115 @@
       }
     }
 
-    // Add controlled braiding (~12% dead-end / wall openings) so multiple routes exist.
-    // This guarantees BFS/A* find the true shortest path while DFS may take longer paths.
+    // Controlled braiding (~10%) so multiple paths exist
     const candidates = [];
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
-        if (r + 1 < n && grid[r][c].walls.bottom) {
-          candidates.push({ r, c, dir: DIRS[2] });
-        }
-        if (c + 1 < n && grid[r][c].walls.right) {
-          candidates.push({ r, c, dir: DIRS[1] });
-        }
+        if (r + 1 < n && grid[r][c].walls.bottom) candidates.push({ r, c, dir: DIRS[2] });
+        if (c + 1 < n && grid[r][c].walls.right) candidates.push({ r, c, dir: DIRS[1] });
       }
     }
-    shuffle(candidates);
+    shuffle(candidates, rng);
     const extraOpenings = Math.max(1, Math.floor(n * n * 0.1));
     for (let i = 0; i < Math.min(extraOpenings, candidates.length); i++) {
       const { r, c, dir } = candidates[i];
-      const nr = r + dir.dr;
-      const nc = c + dir.dc;
       grid[r][c].walls[dir.key] = false;
-      grid[nr][nc].walls[dir.opp] = false;
+      grid[r + dir.dr][c + dir.dc].walls[dir.opp] = false;
     }
 
-    // Safety verification: ensure (0,0) -> (n-1,n-1) is always reachable
     if (!verifyPathExists(grid, n)) {
-      return generateMaze(n);
+      return generateRandomMaze(n, seed + 1);
+    }
+    return grid;
+  }
+
+  function generateUTrapPreset() {
+    const n = 20;
+    const grid = createEmptyGrid(n, true);
+
+    // Classic U-shaped wall pocket facing top-left toward (0,0)
+    for (let r = 4; r <= 14; r++) {
+      grid[r][14].type = "wall";
+    }
+    for (let c = 5; c <= 14; c++) {
+      grid[4][c].type = "wall";
+      grid[14][c].type = "wall";
+    }
+
+    // Additional partial dividers to create interesting exploration choices
+    for (let r = 0; r <= 7; r++) {
+      if (r !== 3) grid[r][3].type = "wall";
+    }
+    for (let c = 10; c <= 17; c++) {
+      if (c !== 15) grid[17][c].type = "wall";
     }
 
     return grid;
   }
 
+  function generateSwampPreset() {
+    const n = 20;
+    const grid = createEmptyGrid(n, true);
+
+    // Start with all wall blocks, then carve a trunk + two distinct paths + dead-end branches
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        grid[r][c].type = "wall";
+      }
+    }
+
+    const carve = (r, c, type = "normal") => {
+      grid[r][c].type = type;
+    };
+
+    // 1. Trunk from Start (0,0) -> (0,8) -> Fork (8,8) [16 steps]
+    for (let c = 0; c <= 8; c++) carve(0, c);
+    for (let r = 1; r <= 8; r++) carve(r, 8);
+
+    // 2. Shortcut from (8,8) -> (8,17) -> (17,17) [18 steps, 6 swamp tiles => cost 42]
+    for (let c = 9; c <= 17; c++) {
+      const isSwamp = c >= 10 && c <= 15;
+      carve(8, c, isSwamp ? "swamp" : "normal");
+    }
+    for (let r = 9; r <= 17; r++) carve(r, 17);
+
+    // 3. Clean Detour from (8,8) -> (8,2) -> (17,2) -> (17,17) [30 steps, all normal => cost 30]
+    for (let c = 2; c <= 7; c++) carve(8, c);
+    for (let r = 9; r <= 17; r++) carve(r, 2);
+    for (let c = 3; c <= 16; c++) carve(17, c);
+
+    // 4. Tail from (17,17) -> (17,19) -> Goal (19,19) [4 steps]
+    carve(17, 18);
+    carve(17, 19);
+    carve(18, 19);
+    carve(19, 19);
+
+    // 5. Safe dead-end branches (never bridging the two routes) so DFS explores meaningfully
+    for (let r = 1; r <= 5; r++) carve(r, 4);
+    for (let c = 1; c <= 4; c++) carve(1, c);
+    for (let c = 9; c <= 15; c++) carve(3, c);
+    for (let r = 1; r <= 3; r++) carve(r, 10);
+    for (let r = 11; r <= 14; r++) carve(r, 6);
+    for (let c = 3; c <= 6; c++) carve(11, c);
+
+    return grid;
+  }
+
+  function canPass(grid, n, r, c, dir) {
+    if (grid[r][c].type === "wall") return false;
+    if (grid[r][c].walls[dir.key]) return false;
+    const nr = r + dir.dr;
+    const nc = c + dir.dc;
+    if (nr < 0 || nr >= n || nc < 0 || nc >= n) return false;
+    return grid[nr][nc].type !== "wall";
+  }
+
+  function getEnterCost(grid, r, c) {
+    return grid[r][c].type === "swamp" ? SWAMP_COST : 1;
+  }
+
   function verifyPathExists(grid, n) {
+    if (grid[0][0].type === "wall" || grid[n - 1][n - 1].type === "wall") return false;
     const seen = Array.from({ length: n }, () => Array(n).fill(false));
     const queue = [{ r: 0, c: 0 }];
     seen[0][0] = true;
@@ -279,7 +436,7 @@
       const { r, c } = queue[head++];
       if (r === n - 1 && c === n - 1) return true;
       for (const dir of DIRS) {
-        if (!grid[r][c].walls[dir.key]) {
+        if (canPass(grid, n, r, c, dir)) {
           const nr = r + dir.dr;
           const nc = c + dir.dc;
           if (!seen[nr][nc]) {
@@ -327,9 +484,7 @@
         if (this.compare(this.data[idx], this.data[parent]) < 0) {
           [this.data[idx], this.data[parent]] = [this.data[parent], this.data[idx]];
           idx = parent;
-        } else {
-          break;
-        }
+        } else break;
       }
     }
 
@@ -339,13 +494,8 @@
         const left = (idx << 1) + 1;
         const right = left + 1;
         let smallest = idx;
-
-        if (left < len && this.compare(this.data[left], this.data[smallest]) < 0) {
-          smallest = left;
-        }
-        if (right < len && this.compare(this.data[right], this.data[smallest]) < 0) {
-          smallest = right;
-        }
+        if (left < len && this.compare(this.data[left], this.data[smallest]) < 0) smallest = left;
+        if (right < len && this.compare(this.data[right], this.data[smallest]) < 0) smallest = right;
         if (smallest === idx) break;
         [this.data[idx], this.data[smallest]] = [this.data[smallest], this.data[idx]];
         idx = smallest;
@@ -368,6 +518,14 @@
     return path;
   }
 
+  function computePathCost(grid, path) {
+    let cost = 0;
+    for (let i = 1; i < path.length; i++) {
+      cost += getEnterCost(grid, path[i].r, path[i].c);
+    }
+    return cost;
+  }
+
   function runBFS(grid, n, recordTrace = true) {
     const goalR = n - 1;
     const goalC = n - 1;
@@ -384,18 +542,22 @@
     while (head < queue.length) {
       const curr = queue[head++];
       exploredCount++;
-
       const discovered = recordTrace ? [] : null;
 
       if (curr.r === goalR && curr.c === goalC) {
-        if (recordTrace) steps.push({ current: curr, discovered: [] });
+        if (recordTrace) {
+          steps.push({
+            current: curr,
+            discovered: [],
+            dsCount: queue.length - head
+          });
+        }
         found = true;
         break;
       }
 
-      const walls = grid[curr.r][curr.c].walls;
       for (const dir of DIRS) {
-        if (!walls[dir.key]) {
+        if (canPass(grid, n, curr.r, curr.c, dir)) {
           const nr = curr.r + dir.dr;
           const nc = curr.c + dir.dc;
           if (!visited[nr][nc]) {
@@ -408,18 +570,24 @@
       }
 
       if (recordTrace) {
-        steps.push({ current: curr, discovered });
+        steps.push({
+          current: curr,
+          discovered,
+          dsCount: queue.length - head
+        });
       }
     }
 
     const path = found ? reconstructPath(parent, goalR, goalC) : [];
+    const totalCost = found ? computePathCost(grid, path) : 0;
     return {
       algo: "bfs",
       found,
       steps: steps || [],
       path,
       exploredCount,
-      pathLength: found ? path.length - 1 : 0
+      pathLength: found ? path.length - 1 : 0,
+      totalCost
     };
   }
 
@@ -429,9 +597,7 @@
     const visited = Array.from({ length: n }, () => Array(n).fill(false));
     const parent = new Map();
     const stack = [{ r: 0, c: 0 }];
-
-    // Push order chosen so DFS explores branches naturally rather than hugging right-bottom blindly
-    const dfsDirs = [DIRS[1], DIRS[2], DIRS[3], DIRS[0]]; // right, bottom, left, top (LIFO pops top/left first)
+    const dfsDirs = [DIRS[1], DIRS[2], DIRS[3], DIRS[0]];
 
     const steps = recordTrace ? [] : null;
     let exploredCount = 0;
@@ -446,14 +612,19 @@
       const discovered = recordTrace ? [] : null;
 
       if (curr.r === goalR && curr.c === goalC) {
-        if (recordTrace) steps.push({ current: curr, discovered: [] });
+        if (recordTrace) {
+          steps.push({
+            current: curr,
+            discovered: [],
+            dsCount: stack.length
+          });
+        }
         found = true;
         break;
       }
 
-      const walls = grid[curr.r][curr.c].walls;
       for (const dir of dfsDirs) {
-        if (!walls[dir.key]) {
+        if (canPass(grid, n, curr.r, curr.c, dir)) {
           const nr = curr.r + dir.dr;
           const nc = curr.c + dir.dc;
           if (!visited[nr][nc]) {
@@ -465,18 +636,24 @@
       }
 
       if (recordTrace) {
-        steps.push({ current: curr, discovered });
+        steps.push({
+          current: curr,
+          discovered,
+          dsCount: stack.length
+        });
       }
     }
 
     const path = found ? reconstructPath(parent, goalR, goalC) : [];
+    const totalCost = found ? computePathCost(grid, path) : 0;
     return {
       algo: "dfs",
       found,
       steps: steps || [],
       path,
       exploredCount,
-      pathLength: found ? path.length - 1 : 0
+      pathLength: found ? path.length - 1 : 0,
+      totalCost
     };
   }
 
@@ -511,19 +688,27 @@
       const discovered = recordTrace ? [] : null;
 
       if (curr.r === goalR && curr.c === goalC) {
-        if (recordTrace) steps.push({ current: { r: curr.r, c: curr.c }, discovered: [] });
+        if (recordTrace) {
+          steps.push({
+            current: { r: curr.r, c: curr.c },
+            discovered: [],
+            dsCount: pq.size,
+            g: curr.g,
+            h: curr.h,
+            f: curr.f
+          });
+        }
         found = true;
         break;
       }
 
-      const walls = grid[curr.r][curr.c].walls;
       for (const dir of DIRS) {
-        if (!walls[dir.key]) {
+        if (canPass(grid, n, curr.r, curr.c, dir)) {
           const nr = curr.r + dir.dr;
           const nc = curr.c + dir.dc;
           if (closed[nr][nc]) continue;
 
-          const tentativeG = curr.g + 1;
+          const tentativeG = curr.g + getEnterCost(grid, nr, nc);
           if (tentativeG < gScore[nr][nc]) {
             gScore[nr][nc] = tentativeG;
             parent.set(cellKey(nr, nc), cellKey(curr.r, curr.c));
@@ -535,32 +720,37 @@
       }
 
       if (recordTrace) {
-        steps.push({ current: { r: curr.r, c: curr.c }, discovered });
+        steps.push({
+          current: { r: curr.r, c: curr.c },
+          discovered,
+          dsCount: pq.size,
+          g: curr.g,
+          h: curr.h,
+          f: curr.f
+        });
       }
     }
 
     const path = found ? reconstructPath(parent, goalR, goalC) : [];
+    const totalCost = found ? computePathCost(grid, path) : 0;
     return {
       algo: "astar",
       found,
       steps: steps || [],
       path,
       exploredCount,
-      pathLength: found ? path.length - 1 : 0
+      pathLength: found ? path.length - 1 : 0,
+      totalCost
     };
   }
 
   function executeAlgorithmTimed(algoId) {
-    const runner =
-      algoId === "bfs" ? runBFS : algoId === "dfs" ? runDFS : runAStar;
-
-    // Measure single run first
+    const runner = algoId === "bfs" ? runBFS : algoId === "dfs" ? runDFS : runAStar;
     const t0 = performance.now();
     const result = runner(state.grid, state.size, true);
     const t1 = performance.now();
     let elapsedMs = t1 - t0;
 
-    // If browser timer resolution coarsens a fast 10x10 run below 0.08ms, benchmark pure execution over 25 passes
     if (elapsedMs < 0.08) {
       const iterations = 25;
       const bt0 = performance.now();
@@ -576,277 +766,390 @@
   }
 
   // =========================================================================
-  // Canvas Sizing & High-DPI Rendering
+  // Trace Track Factory & Shared Canvas Renderer
   // =========================================================================
-  function resizeCanvas() {
-    const rect = dom.canvasWrapper.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const side = Math.max(240, Math.floor(rect.width));
-    dom.canvas.width = side * dpr;
-    dom.canvas.height = side * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render();
+  function createTrack(result, prefillComplete = false) {
+    const track = {
+      algo: result.algo,
+      result,
+      exploredCells: [],
+      exploredSet: new Set(),
+      frontierSet: new Set(),
+      currentHeadKey: null,
+      exploredCursor: 0,
+      pathCursor: 0,
+      lastStepInfo: null
+    };
+
+    if (prefillComplete) {
+      for (const s of result.steps) {
+        track.exploredCells.push(s.current);
+        track.exploredSet.add(cellKey(s.current.r, s.current.c));
+      }
+      track.exploredCursor = result.steps.length;
+      track.pathCursor = result.path.length;
+      track.lastStepInfo = result.steps[result.steps.length - 1] || null;
+    }
+    return track;
   }
 
-  function render() {
+  function advanceTrack(track, stepsToAdvance) {
+    const { result } = track;
+    const totalExplored = result.steps.length;
+    const totalPath = result.path.length;
+
+    while (stepsToAdvance > 0) {
+      if (track.exploredCursor < totalExplored) {
+        const step = result.steps[track.exploredCursor++];
+        const key = cellKey(step.current.r, step.current.c);
+        track.frontierSet.delete(key);
+        track.exploredSet.add(key);
+        track.exploredCells.push(step.current);
+        track.currentHeadKey = key;
+        track.lastStepInfo = step;
+
+        for (const d of step.discovered) {
+          const dk = cellKey(d.r, d.c);
+          if (!track.exploredSet.has(dk)) {
+            track.frontierSet.add(dk);
+          }
+        }
+        stepsToAdvance--;
+      } else if (result.found && track.pathCursor < totalPath) {
+        track.currentHeadKey = null;
+        track.frontierSet.clear();
+        track.pathCursor = Math.min(totalPath, track.pathCursor + Math.max(1, Math.ceil(stepsToAdvance * 0.6)));
+        stepsToAdvance = 0;
+      } else {
+        track.currentHeadKey = null;
+        track.frontierSet.clear();
+        break;
+      }
+    }
+
+    const done = track.exploredCursor >= totalExplored && (!result.found || track.pathCursor >= totalPath);
+    if (done) {
+      track.currentHeadKey = null;
+      track.frontierSet.clear();
+    }
+    return done;
+  }
+
+  function syncCanvasSize(canvasEl) {
+    const prevW = canvasEl.style.width;
+    const prevH = canvasEl.style.height;
+    canvasEl.style.width = "0px";
+    canvasEl.style.height = "0px";
+    const rect = canvasEl.parentElement.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = dom.canvas.width / dpr;
-    const height = dom.canvas.height / dpr;
+    const availH = rect.height > 0 ? rect.height : rect.width;
+    const side = Math.max(150, Math.floor(Math.min(rect.width, availH)));
+    if (rect.width > 0 && rect.height > 0) {
+      canvasEl.style.width = `${side}px`;
+      canvasEl.style.height = `${side}px`;
+    } else {
+      canvasEl.style.width = prevW;
+      canvasEl.style.height = prevH;
+    }
+    if (canvasEl._lastSide === side && canvasEl._lastDpr === dpr) {
+      return side;
+    }
+    canvasEl._lastSide = side;
+    canvasEl._lastDpr = dpr;
+    canvasEl.width = side * dpr;
+    canvasEl.height = side * dpr;
+    const context = canvasEl.getContext("2d");
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return side;
+  }
+
+  function resizeAllCanvases() {
+    syncCanvasSize(dom.canvas);
+    Object.values(dom.raceCanvases).forEach((c) => syncCanvasSize(c));
+    renderCurrentView();
+  }
+
+  function renderCurrentView() {
+    if (state.viewMode === "race" && state.mode === "ai" && state.raceTracks) {
+      for (const algoId of ["bfs", "dfs", "astar"]) {
+        drawScene(dom.raceCanvases[algoId], "ai", state.raceTracks[algoId], algoId);
+      }
+    } else {
+      drawScene(dom.canvas, state.mode, state.singleTrack, state.activeAlgoId);
+    }
+  }
+
+  function drawScene(canvasEl, renderMode, track, algoId) {
+    const c = canvasEl.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = canvasEl.width / dpr;
     const n = state.size;
-    const padding = Math.max(8, Math.floor(width * 0.025));
+    const padding = Math.max(5, Math.floor(width * 0.025));
     const boardSize = width - padding * 2;
     const cellSize = boardSize / n;
 
-    // Clear background
-    ctx.fillStyle = "#04070e";
-    ctx.fillRect(0, 0, width, height);
+    c.fillStyle = "#080c14";
+    c.fillRect(0, 0, width, width);
 
-    // Subtle board grid backdrop
-    ctx.fillStyle = "#070c18";
-    ctx.fillRect(padding, padding, boardSize, boardSize);
+    c.fillStyle = "#0b111d";
+    c.fillRect(padding, padding, boardSize, boardSize);
 
-    if (state.mode === "ai") {
-      renderAiLayers(padding, cellSize);
-    } else {
-      renderManualLayers(padding, cellSize);
+    // 1. Terrain cells (swamp & solid wall blocks)
+    drawTerrainCells(c, padding, cellSize, n);
+
+    // 2. Mode overlay
+    if (renderMode === "ai" && track) {
+      drawAiOverlay(c, padding, cellSize, track, algoId);
+    } else if (renderMode === "manual") {
+      drawManualOverlay(c, padding, cellSize);
     }
 
-    // Start (0,0) & Goal (n-1,n-1) markers
-    drawTerminalCell(padding, cellSize, 0, 0, "#22d3ee", "起");
-    drawTerminalCell(padding, cellSize, n - 1, n - 1, "#10b981", "終");
+    // 3. Start & Goal markers
+    drawTerminalCell(c, padding, cellSize, 0, 0, "#38bdf8", "起");
+    drawTerminalCell(c, padding, cellSize, n - 1, n - 1, "#34d399", "終");
 
-    // Draw maze walls sharply on top
-    drawWalls(padding, cellSize, n);
+    // 4. Maze walls
+    drawWalls(c, padding, cellSize, n);
   }
 
-  function drawTerminalCell(padding, cellSize, r, c, color, label) {
-    const x = padding + c * cellSize;
+  function drawTerrainCells(c, padding, cellSize, n) {
+    for (let r = 0; r < n; r++) {
+      for (let col = 0; col < n; col++) {
+        const type = state.grid[r][col].type;
+        if (type === "normal") continue;
+
+        const x = padding + col * cellSize;
+        const y = padding + r * cellSize;
+
+        if (type === "wall") {
+          c.fillStyle = "#334155";
+          c.fillRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+          c.strokeStyle = "#64748b";
+          c.lineWidth = 0.8;
+          c.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+        } else if (type === "swamp") {
+          c.fillStyle = "rgba(180, 83, 9, 0.45)";
+          c.fillRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+          if (cellSize >= 14) {
+            c.fillStyle = "rgba(251, 191, 36, 0.55)";
+            c.font = `700 ${Math.max(8, Math.floor(cellSize * 0.34))}px sans-serif`;
+            c.textAlign = "center";
+            c.textBaseline = "middle";
+            c.fillText("×5", x + cellSize / 2, y + cellSize / 2);
+          }
+        }
+      }
+    }
+  }
+
+  function drawTerminalCell(c, padding, cellSize, r, col, color, label) {
+    const x = padding + col * cellSize;
     const y = padding + r * cellSize;
-    const inset = Math.max(1.5, cellSize * 0.12);
+    const inset = Math.max(1.2, cellSize * 0.12);
 
-    ctx.save();
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.28;
-    ctx.fillRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
+    c.save();
+    c.fillStyle = color;
+    c.globalAlpha = 0.28;
+    c.fillRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
 
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1.2, cellSize * 0.06);
-    ctx.strokeRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
+    c.globalAlpha = 1;
+    c.strokeStyle = color;
+    c.lineWidth = Math.max(1, cellSize * 0.06);
+    c.strokeRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
 
-    if (cellSize >= 18) {
-      ctx.fillStyle = "#f8fafc";
-      ctx.font = `700 ${Math.floor(cellSize * 0.42)}px "Noto Sans TC", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(label, x + cellSize / 2, y + cellSize / 2 + 0.5);
+    if (cellSize >= 14) {
+      c.fillStyle = "#f8fafc";
+      c.font = `700 ${Math.floor(cellSize * 0.42)}px "Noto Sans TC", sans-serif`;
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText(label, x + cellSize / 2, y + cellSize / 2 + 0.5);
     }
-    ctx.restore();
+    c.restore();
   }
 
-  function renderAiLayers(padding, cellSize) {
-    const theme = ALGO_META[state.activeAlgoId] || ALGO_META.astar;
-    const inset = Math.max(0.8, cellSize * 0.08);
+  function drawAiOverlay(c, padding, cellSize, track, algoId) {
+    const theme = ALGO_META[algoId] || ALGO_META.astar;
+    const inset = Math.max(0.6, cellSize * 0.08);
 
-    // 1. Explored cells
-    if (state.exploredCells.length > 0) {
-      ctx.save();
-      ctx.fillStyle = theme.exploredFill;
-      ctx.strokeStyle = theme.exploredStroke;
-      ctx.lineWidth = 0.8;
-
-      for (const cell of state.exploredCells) {
-        const x = padding + cell.c * cellSize + inset;
-        const y = padding + cell.r * cellSize + inset;
-        const s = cellSize - inset * 2;
-        ctx.fillRect(x, y, s, s);
+    if (track.exploredCells.length > 0) {
+      c.save();
+      c.fillStyle = theme.exploredFill;
+      for (const cell of track.exploredCells) {
+        c.fillRect(
+          padding + cell.c * cellSize + inset,
+          padding + cell.r * cellSize + inset,
+          cellSize - inset * 2,
+          cellSize - inset * 2
+        );
       }
-      ctx.restore();
+      c.restore();
     }
 
-    // 2. Frontier cells
-    if (state.frontierSet.size > 0) {
-      ctx.save();
-      ctx.fillStyle = theme.frontierFill;
-      const fInset = Math.max(1.2, cellSize * 0.18);
-      for (const key of state.frontierSet) {
+    if (track.frontierSet.size > 0) {
+      c.save();
+      c.fillStyle = theme.frontierFill;
+      const fInset = Math.max(1, cellSize * 0.2);
+      for (const key of track.frontierSet) {
         const [rStr, cStr] = key.split(",");
-        const r = Number(rStr);
-        const c = Number(cStr);
-        const x = padding + c * cellSize + fInset;
-        const y = padding + r * cellSize + fInset;
-        ctx.fillRect(x, y, cellSize - fInset * 2, cellSize - fInset * 2);
+        c.fillRect(
+          padding + Number(cStr) * cellSize + fInset,
+          padding + Number(rStr) * cellSize + fInset,
+          cellSize - fInset * 2,
+          cellSize - fInset * 2
+        );
       }
-      ctx.restore();
+      c.restore();
     }
 
-    // 3. Active head cell
-    if (state.currentHeadKey && state.animStatus === "running") {
-      const [rStr, cStr] = state.currentHeadKey.split(",");
-      const r = Number(rStr);
-      const c = Number(cStr);
-      const cx = padding + (c + 0.5) * cellSize;
-      const cy = padding + (r + 0.5) * cellSize;
-
-      ctx.save();
-      ctx.fillStyle = theme.headColor;
-      ctx.shadowColor = theme.headColor;
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(2.5, cellSize * 0.28), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+    if (track.currentHeadKey && state.animStatus === "running") {
+      const [rStr, cStr] = track.currentHeadKey.split(",");
+      const cx = padding + (Number(cStr) + 0.5) * cellSize;
+      const cy = padding + (Number(rStr) + 0.5) * cellSize;
+      c.save();
+      c.fillStyle = theme.headColor;
+      c.beginPath();
+      c.arc(cx, cy, Math.max(2, cellSize * 0.28), 0, Math.PI * 2);
+      c.fill();
+      c.restore();
     }
 
-    // 4. Final glowing path
-    if (state.activeResult && state.activeResult.found && state.pathStepCursor > 0) {
-      const path = state.activeResult.path;
-      const count = Math.min(state.pathStepCursor, path.length);
-      drawPathRibbon(padding, cellSize, path, count, theme.pathColor, theme.pathGlow);
+    if (track.result.found && track.pathCursor > 0) {
+      drawPathRibbon(
+        c,
+        padding,
+        cellSize,
+        track.result.path,
+        Math.min(track.pathCursor, track.result.path.length),
+        theme.pathColor,
+        theme.pathGlow
+      );
     }
   }
 
-  function renderManualLayers(padding, cellSize) {
+  function drawManualOverlay(c, padding, cellSize) {
     const m = state.manual;
 
-    // 1. Optional AI optimal path overlay
     if (m.showOptimal && m.optimalResult && m.optimalResult.found) {
       drawPathRibbon(
+        c,
         padding,
         cellSize,
         m.optimalResult.path,
         m.optimalResult.path.length,
         "#34d399",
         "rgba(52, 211, 153, 0.7)",
-        0.75
+        0.8
       );
     }
 
-    // 2. Player visited cells tint
-    ctx.save();
-    ctx.fillStyle = "rgba(251, 191, 36, 0.16)";
+    c.save();
+    c.fillStyle = "rgba(251, 191, 36, 0.16)";
     const inset = Math.max(1, cellSize * 0.12);
     for (const key of m.visitedSet) {
       const [rStr, cStr] = key.split(",");
-      const r = Number(rStr);
-      const c = Number(cStr);
-      ctx.fillRect(
-        padding + c * cellSize + inset,
-        padding + r * cellSize + inset,
+      c.fillRect(
+        padding + Number(cStr) * cellSize + inset,
+        padding + Number(rStr) * cellSize + inset,
         cellSize - inset * 2,
         cellSize - inset * 2
       );
     }
-    ctx.restore();
+    c.restore();
 
-    // 3. Player trail line
     if (m.trail.length > 1) {
-      drawPathRibbon(
-        padding,
-        cellSize,
-        m.trail,
-        m.trail.length,
-        "#fbbf24",
-        "rgba(251, 191, 36, 0.55)",
-        0.9
-      );
+      drawPathRibbon(c, padding, cellSize, m.trail, m.trail.length, "#fbbf24", "rgba(251, 191, 36, 0.55)", 0.9);
     }
 
-    // 4. Player avatar orb
     const px = padding + (m.c + 0.5) * cellSize;
     const py = padding + (m.r + 0.5) * cellSize;
     const radius = Math.max(3.5, cellSize * 0.3);
 
-    ctx.save();
+    c.save();
     const isBumping = m.bumpAlpha > 0.02;
     const orbColor = isBumping ? "#fb7185" : "#fbbf24";
-    ctx.fillStyle = orbColor;
-    ctx.shadowColor = orbColor;
-    ctx.shadowBlur = isBumping ? 18 : 14;
-    ctx.beginPath();
-    ctx.arc(px, py, radius, 0, Math.PI * 2);
-    ctx.fill();
+    c.fillStyle = orbColor;
+    c.shadowColor = orbColor;
+    c.shadowBlur = isBumping ? 14 : 10;
+    c.beginPath();
+    c.arc(px, py, radius, 0, Math.PI * 2);
+    c.fill();
 
-    ctx.fillStyle = "#fffbeb";
-    ctx.shadowBlur = 0;
-    ctx.beginPath();
-    ctx.arc(px, py, radius * 0.42, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    c.fillStyle = "#fffbeb";
+    c.shadowBlur = 0;
+    c.beginPath();
+    c.arc(px, py, radius * 0.4, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
   }
 
-  function drawPathRibbon(padding, cellSize, path, count, color, glowColor, alpha = 1) {
+  function drawPathRibbon(c, padding, cellSize, path, count, color, glowColor, alpha = 1) {
     if (count < 1) return;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = color;
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = Math.max(6, cellSize * 0.35);
-    ctx.lineWidth = Math.max(2.2, cellSize * 0.26);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    c.save();
+    c.globalAlpha = alpha;
+    c.strokeStyle = color;
+    c.shadowColor = glowColor;
+    c.shadowBlur = Math.max(4, cellSize * 0.28);
+    c.lineWidth = Math.max(2, cellSize * 0.25);
+    c.lineCap = "round";
+    c.lineJoin = "round";
 
-    ctx.beginPath();
+    c.beginPath();
     for (let i = 0; i < count; i++) {
       const pt = path[i];
       const x = padding + (pt.c + 0.5) * cellSize;
       const y = padding + (pt.r + 0.5) * cellSize;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if (i === 0) c.moveTo(x, y);
+      else c.lineTo(x, y);
     }
-    ctx.stroke();
-    ctx.restore();
+    c.stroke();
+    c.restore();
   }
 
-  function drawWalls(padding, cellSize, n) {
-    ctx.save();
-    ctx.strokeStyle = "#38bdf8";
-    ctx.globalAlpha = 0.72;
-    ctx.lineWidth = n === 40 ? 1.35 : n === 20 ? 1.9 : 2.5;
-    ctx.lineCap = "square";
+  function drawWalls(c, padding, cellSize, n) {
+    c.save();
+    c.strokeStyle = "rgba(148, 163, 184, 0.72)";
+    c.lineWidth = n === 40 ? 1.1 : n === 20 ? 1.6 : 2.1;
+    c.lineCap = "square";
 
-    ctx.beginPath();
+    c.beginPath();
     for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        const w = state.grid[r][c].walls;
-        const x1 = padding + c * cellSize;
+      for (let col = 0; col < n; col++) {
+        const w = state.grid[r][col].walls;
+        const x1 = padding + col * cellSize;
         const y1 = padding + r * cellSize;
         const x2 = x1 + cellSize;
         const y2 = y1 + cellSize;
 
         if (w.top) {
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y1);
+          c.moveTo(x1, y1);
+          c.lineTo(x2, y1);
         }
         if (w.left) {
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x1, y2);
+          c.moveTo(x1, y1);
+          c.lineTo(x1, y2);
         }
         if (r === n - 1 && w.bottom) {
-          ctx.moveTo(x1, y2);
-          ctx.lineTo(x2, y2);
+          c.moveTo(x1, y2);
+          c.lineTo(x2, y2);
         }
-        if (c === n - 1 && w.right) {
-          ctx.moveTo(x2, y1);
-          ctx.lineTo(x2, y2);
+        if (col === n - 1 && w.right) {
+          c.moveTo(x2, y1);
+          c.lineTo(x2, y2);
         }
       }
     }
-    ctx.stroke();
+    c.stroke();
 
-    // Outer neon border emphasis
-    ctx.globalAlpha = 0.95;
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
-    ctx.lineWidth = Math.max(2, ctx.lineWidth + 0.4);
-    ctx.strokeRect(padding, padding, n * cellSize, n * cellSize);
-    ctx.restore();
+    c.strokeStyle = "rgba(56, 189, 248, 0.65)";
+    c.lineWidth = Math.max(1.6, c.lineWidth + 0.4);
+    c.strokeRect(padding, padding, n * cellSize, n * cellSize);
+    c.restore();
   }
 
   // =========================================================================
-  // Animation Loop & Playback Control
+  // View Switching & Playback Engine
   // =========================================================================
   function getStepsPerSecond(speedVal) {
-    // Exponential curve: 1 -> ~3 steps/s, 50 -> ~70 steps/s, 100 -> ~2400 steps/s
     return 2.5 * Math.pow(1.0715, speedVal);
   }
 
@@ -855,31 +1158,32 @@
       cancelAnimationFrame(state.rafId);
       state.rafId = null;
     }
-    if (state.raceTimerId !== null) {
-      clearTimeout(state.raceTimerId);
-      state.raceTimerId = null;
-    }
   }
 
-  function clearVisualTrace() {
-    state.exploredCells = [];
-    state.exploredSet.clear();
-    state.frontierSet.clear();
-    state.currentHeadKey = null;
-    state.exploredStepCursor = 0;
-    state.pathStepCursor = 0;
-    state.stepAccumulator = 0;
+  function setArenaView(viewMode) {
+    state.viewMode = viewMode;
+    const isRace = viewMode === "race" && state.mode === "ai";
+    dom.appShell.classList.toggle("race-theatre", isRace);
+    dom.canvasWrapper.classList.toggle("hidden", isRace);
+    dom.editorToolbar.classList.toggle("hidden", isRace || state.mode !== "ai");
+    dom.raceGrid.classList.toggle("hidden", !isRace);
+    dom.raceViewSwitch.classList.toggle("hidden", !isRace);
+    resizeAllCanvases();
   }
 
   function resetAiState(keepLeaderboard = true) {
     stopLoop();
     state.animStatus = "idle";
     state.isRacing = false;
-    state.raceQueue = [];
-    state.raceIndex = 0;
     state.activeResult = null;
+    state.singleTrack = null;
+    state.raceTracks = null;
     state.activeAlgoId = state.selectedAlgo;
-    clearVisualTrace();
+    state.stepAccumulator = 0;
+
+    if (state.mode === "ai") {
+      setArenaView("single");
+    }
 
     if (!keepLeaderboard) {
       state.raceResults = [];
@@ -892,26 +1196,37 @@
     updatePlaybackButtons();
     updateAiHud();
     if (state.mode === "ai") {
-      setStatus("就緒：請選擇演算法或開始競賽", "idle");
+      setStatus("就緒：選擇演算法、編輯地形或直接同時競速", "idle");
+      setInsight("待機中：點選「開始」觀察資料結構變化，或點「一鍵同時競速」三路對決。");
     }
-    render();
+    renderCurrentView();
   }
 
   function updatePlaybackButtons() {
     const s = state.animStatus;
     if (state.isRacing) {
       dom.startBtn.disabled = true;
-      dom.startBtn.textContent = "競賽中";
+      dom.startBtn.textContent = "競速中";
       dom.pauseBtn.disabled = s !== "running" && s !== "paused";
       dom.pauseBtn.textContent = s === "paused" ? "繼續" : "暫停";
       dom.resetBtn.disabled = false;
       dom.raceBtn.disabled = true;
       dom.skipRaceBtn.classList.remove("hidden");
+
+      dom.raceReplayBtn.disabled = true;
+      dom.racePauseBtn.disabled = s !== "running" && s !== "paused";
+      dom.racePauseBtn.textContent = s === "paused" ? "繼續" : "暫停";
+      dom.raceSkipBarBtn.classList.remove("hidden");
       return;
     }
 
     dom.skipRaceBtn.classList.add("hidden");
     dom.raceBtn.disabled = false;
+
+    dom.raceReplayBtn.disabled = false;
+    dom.racePauseBtn.disabled = true;
+    dom.racePauseBtn.textContent = "暫停";
+    dom.raceSkipBarBtn.classList.add("hidden");
 
     if (s === "idle") {
       dom.startBtn.disabled = false;
@@ -937,146 +1252,273 @@
   }
 
   function updateAiHud() {
+    if (state.viewMode === "race" && state.raceTracks) {
+      dom.hudAlgo.textContent = "三演算法同時競速";
+      const totalExp =
+        state.raceTracks.bfs.exploredCells.length +
+        state.raceTracks.dfs.exploredCells.length +
+        state.raceTracks.astar.exploredCells.length;
+      dom.hudExplored.textContent = `合計 ${totalExp} 格`;
+      const bestDone = state.raceResults.filter((r) => r.found).sort((a, b) => a.totalCost - b.totalCost)[0];
+      dom.hudPath.textContent = bestDone ? `最佳 ${bestDone.pathLength} 步 / 成本 ${bestDone.totalCost}` : "競速進行中...";
+      dom.hudTime.textContent = bestDone ? formatMs(bestDone.elapsedMs) : "-- ms";
+      return;
+    }
+
     const meta = ALGO_META[state.activeAlgoId] || ALGO_META[state.selectedAlgo];
     dom.hudAlgo.textContent = meta.fullName;
 
-    if (!state.activeResult) {
+    if (!state.activeResult || !state.singleTrack) {
       dom.hudExplored.textContent = "0 格";
-      dom.hudPath.textContent = "-- 步";
+      dom.hudPath.textContent = "--";
       dom.hudTime.textContent = "-- ms";
       return;
     }
 
-    dom.hudExplored.textContent = `${state.exploredCells.length} 格`;
+    dom.hudExplored.textContent = `${state.singleTrack.exploredCells.length} 格`;
     dom.hudTime.textContent = formatMs(state.activeResult.elapsedMs);
 
-    if (state.animStatus === "finished" || state.pathStepCursor >= state.activeResult.path.length) {
+    if (state.animStatus === "finished" || state.singleTrack.pathCursor >= state.activeResult.path.length) {
       dom.hudPath.textContent = state.activeResult.found
-        ? `${state.activeResult.pathLength} 步`
-        : "無解";
+        ? `${state.activeResult.pathLength} 步 / 成本 ${state.activeResult.totalCost}`
+        : "無解（路徑受阻）";
     } else {
       dom.hudPath.textContent = "搜尋中...";
     }
   }
 
+  function updateSingleInsight() {
+    const track = state.singleTrack;
+    if (!track || !track.lastStepInfo) return;
+    const info = track.lastStepInfo;
+    const meta = ALGO_META[track.algo];
+
+    if (track.algo === "bfs") {
+      setInsight(`${meta.dsName} 待探索：${info.dsCount} 格｜正以水波狀逐層向外檢查鄰近通道`);
+    } else if (track.algo === "dfs") {
+      setInsight(`${meta.dsName} 待回溯：${info.dsCount} 格｜沿著當前分支深入推進，撞牆才回頭`);
+    } else {
+      setInsight(`${meta.dsName} 候選：${info.dsCount} 格｜目前最小估價 f = g(${info.g}) + h(${info.h}) = ${info.f}`);
+    }
+  }
+
   function startSingleAlgorithm() {
-    if (state.animStatus === "paused" && state.activeResult && !state.isRacing) {
+    if (state.animStatus === "paused" && state.singleTrack && !state.isRacing) {
       resumeAnimation();
       return;
     }
 
     stopLoop();
     state.isRacing = false;
+    setArenaView("single");
+
     state.activeAlgoId = state.selectedAlgo;
     state.activeResult = executeAlgorithmTimed(state.selectedAlgo);
-    clearVisualTrace();
-
+    state.singleTrack = createTrack(state.activeResult, false);
+    state.stepAccumulator = 0;
     state.animStatus = "running";
     state.lastFrameTime = performance.now();
+
     updatePlaybackButtons();
     updateAiHud();
+    setStatus(`正在執行：${ALGO_META[state.selectedAlgo].fullName}`, "running");
 
-    const meta = ALGO_META[state.selectedAlgo];
-    setStatus(`正在執行：${meta.fullName}`, "running");
-
-    state.rafId = requestAnimationFrame(tickAnimation);
+    state.rafId = requestAnimationFrame(tickSingleAnimation);
   }
 
   function startRace() {
     stopLoop();
     state.isRacing = true;
-    state.raceQueue = ["bfs", "dfs", "astar"];
-    state.raceIndex = 0;
     state.raceResults = [];
     state.selectedLeaderboardAlgo = null;
 
-    renderLeaderboard();
-    dom.raceStatusBadge.textContent = "競賽進行中 (1/3)";
-    dom.raceStatusBadge.className = "badge badge-cyan";
+    const bfsRes = executeAlgorithmTimed("bfs");
+    const dfsRes = executeAlgorithmTimed("dfs");
+    const astarRes = executeAlgorithmTimed("astar");
 
-    // Precompute all 3 on the exact same maze cleanly
-    state.precomputedRace = state.raceQueue.map((id) => executeAlgorithmTimed(id));
-    beginRaceLeg(0);
-  }
-
-  function beginRaceLeg(index) {
-    const result = state.precomputedRace[index];
-    state.raceIndex = index;
-    state.activeAlgoId = result.algo;
-    state.activeResult = result;
-    clearVisualTrace();
-
+    state.raceTracks = {
+      bfs: createTrack(bfsRes, false),
+      dfs: createTrack(dfsRes, false),
+      astar: createTrack(astarRes, false)
+    };
+    state.stepAccumulator = 0;
     state.animStatus = "running";
     state.lastFrameTime = performance.now();
 
-    const meta = ALGO_META[result.algo];
-    dom.raceStatusBadge.textContent = `競賽進行中 (${index + 1}/3)`;
-    setStatus(`一鍵競賽 (${index + 1}/3)：${meta.fullName}`, "running");
+    setArenaView("race");
+    renderLeaderboard();
+    updateRaceMiniCards();
+
+    dom.raceStatusBadge.textContent = "三路同時競速中";
+    dom.raceStatusBadge.className = "badge badge-cyan";
+    setStatus("三演算法同時開跑（BFS vs DFS vs A*）！", "running");
+    setInsight("同時對比：觀察 A* 如何靠距離預估直奔終點，而 BFS 逐層擴散、DFS 深入繞行。");
     updatePlaybackButtons();
     updateAiHud();
 
-    state.rafId = requestAnimationFrame(tickAnimation);
+    state.rafId = requestAnimationFrame(tickRaceAnimation);
+  }
+
+  function updateRaceMiniCards() {
+    if (!state.raceTracks) return;
+    const map = { bfs: "Bfs", dfs: "Dfs", astar: "Astar" };
+    for (const id of ["bfs", "dfs", "astar"]) {
+      const t = state.raceTracks[id];
+      const done =
+        t.exploredCursor >= t.result.steps.length &&
+        (!t.result.found || t.pathCursor >= t.result.path.length);
+
+      const statEl = dom.raceStats[id];
+      const footEl = dom.raceFoots[id];
+      if (done) {
+        statEl.textContent = t.result.found ? "已抵達" : "無解";
+        statEl.classList.add("done");
+        footEl.textContent = t.result.found
+          ? `探索：${t.result.exploredCount} 格 ｜ ${t.result.pathLength} 步 (成本 ${t.result.totalCost})`
+          : `探索：${t.result.exploredCount} 格 ｜ 無路可走`;
+      } else {
+        statEl.textContent = "探索中";
+        statEl.classList.remove("done");
+        footEl.textContent = `探索：${t.exploredCells.length} 格 ｜ 計算中...`;
+      }
+    }
+  }
+
+  function tickSingleAnimation(now) {
+    if (state.animStatus !== "running" || !state.singleTrack) return;
+
+    const dt = Math.min(0.05, Math.max(0.001, (now - state.lastFrameTime) / 1000));
+    state.lastFrameTime = now;
+    state.stepAccumulator += getStepsPerSecond(state.speed) * dt;
+
+    const stepsToAdvance = Math.floor(state.stepAccumulator);
+    if (stepsToAdvance > 0) {
+      state.stepAccumulator -= stepsToAdvance;
+      const done = advanceTrack(state.singleTrack, stepsToAdvance);
+      updateSingleInsight();
+      updateAiHud();
+      renderCurrentView();
+
+      if (done) {
+        finishSingleRun();
+        return;
+      }
+    }
+
+    state.rafId = requestAnimationFrame(tickSingleAnimation);
+  }
+
+  function finishSingleRun() {
+    const res = state.activeResult;
+    state.animStatus = "finished";
+    upsertSingleResultIntoLeaderboard(res);
+    state.selectedLeaderboardAlgo = res.algo;
+    renderLeaderboard();
+    updatePlaybackButtons();
+    updateAiHud();
+    renderCurrentView();
+
+    const meta = ALGO_META[res.algo];
+    if (res.found) {
+      setStatus(`完成：${meta.name}（探索 ${res.exploredCount} 格，成本 ${res.totalCost}）`, "idle");
+      setInsight(`結果分析：${meta.name} 探索了 ${res.exploredCount} 格，找到 ${res.pathLength} 步路線（總成本 ${res.totalCost}）。`);
+    } else {
+      setStatus(`無法抵達終點：路徑被障礙牆完全封鎖`, "idle");
+      setInsight("提示：可用「橡皮擦」或「清空地形」開出通道後重新測試。");
+    }
+  }
+
+  function tickRaceAnimation(now) {
+    if (state.animStatus !== "running" || !state.raceTracks) return;
+
+    const dt = Math.min(0.05, Math.max(0.001, (now - state.lastFrameTime) / 1000));
+    state.lastFrameTime = now;
+    state.stepAccumulator += getStepsPerSecond(state.speed) * dt;
+
+    const stepsToAdvance = Math.floor(state.stepAccumulator);
+    if (stepsToAdvance > 0) {
+      state.stepAccumulator -= stepsToAdvance;
+
+      let allDone = true;
+      for (const id of ["bfs", "dfs", "astar"]) {
+        const track = state.raceTracks[id];
+        const done = advanceTrack(track, stepsToAdvance);
+        if (done) {
+          upsertSingleResultIntoLeaderboard(track.result);
+        } else {
+          allDone = false;
+        }
+      }
+
+      updateRaceMiniCards();
+      renderLeaderboard();
+      updateAiHud();
+      renderCurrentView();
+
+      if (allDone) {
+        finishRaceRun();
+        return;
+      }
+    }
+
+    state.rafId = requestAnimationFrame(tickRaceAnimation);
   }
 
   function skipRaceAnimation() {
-    if (!state.isRacing || !state.precomputedRace) return;
+    if (!state.isRacing || !state.raceTracks) return;
     stopLoop();
-    state.raceResults = [...state.precomputedRace];
-    finishWholeRace();
+    for (const id of ["bfs", "dfs", "astar"]) {
+      const res = state.raceTracks[id].result;
+      state.raceTracks[id] = createTrack(res, true);
+      upsertSingleResultIntoLeaderboard(res);
+    }
+    finishRaceRun();
   }
 
-  function finishWholeRace() {
+  function finishRaceRun() {
     state.isRacing = false;
     state.animStatus = "finished";
+    updateRaceMiniCards();
+    renderLeaderboard();
+    updatePlaybackButtons();
+    updateAiHud();
+    renderCurrentView();
 
-    // Sort results to find top performer, and show top performer (or A*) on canvas
     const sorted = getSortedRaceResults();
     const winner = sorted[0];
-    if (winner) {
-      displayCompletedResult(winner);
-      state.selectedLeaderboardAlgo = winner.algo;
-    }
-
-    renderLeaderboard();
-    dom.raceStatusBadge.textContent = "競賽完成";
+    dom.raceStatusBadge.textContent = "競速完成";
     dom.raceStatusBadge.className = "badge badge-emerald";
-    setStatus(`競賽完成！最佳表現：${ALGO_META[winner.algo].name}`, "idle");
-    updatePlaybackButtons();
-  }
 
-  function displayCompletedResult(result) {
-    state.activeAlgoId = result.algo;
-    state.activeResult = result;
-    state.exploredCells = [];
-    state.exploredSet.clear();
-    state.frontierSet.clear();
-    state.currentHeadKey = null;
-
-    for (const step of result.steps) {
-      state.exploredCells.push(step.current);
-      state.exploredSet.add(cellKey(step.current.r, step.current.c));
+    if (winner && winner.found) {
+      const bfsRes = state.raceResults.find((r) => r.algo === "bfs");
+      const astarRes = state.raceResults.find((r) => r.algo === "astar");
+      setStatus(`競速完成！綜合表現最佳：${ALGO_META[winner.algo].name}`, "idle");
+      if (bfsRes && astarRes && bfsRes.found && astarRes.found) {
+        if (astarRes.totalCost < bfsRes.totalCost) {
+          setInsight(`重點觀察：A* 成功避開泥沼（成本 ${astarRes.totalCost} vs BFS ${bfsRes.totalCost}），且探索格數更少！`);
+        } else {
+          setInsight(`重點觀察：A* 與 BFS 成本同樣為 ${astarRes.totalCost}，但 A* 只探索了 ${astarRes.exploredCount} 格（BFS 需 ${bfsRes.exploredCount} 格）。`);
+        }
+      }
+    } else {
+      setStatus("競速結束：起點與終點之間目前沒有連通路徑", "idle");
+      setInsight("目前迷宮被完全封閉，請清除部分障礙牆後再試一次。");
     }
-    state.exploredStepCursor = result.steps.length;
-    state.pathStepCursor = result.path.length;
-    state.animStatus = "finished";
-
-    updateAiHud();
-    render();
   }
 
   function resumeAnimation() {
     if (state.animStatus !== "paused") return;
     state.animStatus = "running";
     state.lastFrameTime = performance.now();
-    const meta = ALGO_META[state.activeAlgoId];
-    setStatus(
-      state.isRacing
-        ? `一鍵競賽 (${state.raceIndex + 1}/3)：${meta.fullName}`
-        : `正在執行：${meta.fullName}`,
-      "running"
-    );
     updatePlaybackButtons();
-    state.rafId = requestAnimationFrame(tickAnimation);
+
+    if (state.isRacing) {
+      setStatus("三演算法繼續競速中...", "running");
+      state.rafId = requestAnimationFrame(tickRaceAnimation);
+    } else {
+      setStatus(`繼續執行：${ALGO_META[state.activeAlgoId].fullName}`, "running");
+      state.rafId = requestAnimationFrame(tickSingleAnimation);
+    }
   }
 
   function togglePauseAnimation() {
@@ -1090,104 +1532,24 @@
     }
   }
 
-  function tickAnimation(now) {
-    if (state.animStatus !== "running" || !state.activeResult) return;
+  function inspectAlgorithmOnSingleCanvas(algoId) {
+    if (state.isRacing || state.animStatus === "running") return;
+    const target = state.raceResults.find((r) => r.algo === algoId);
+    if (!target) return;
 
-    const dt = Math.min(0.05, Math.max(0.001, (now - state.lastFrameTime) / 1000));
-    state.lastFrameTime = now;
-
-    const stepsPerSec = getStepsPerSecond(state.speed);
-    state.stepAccumulator += stepsPerSec * dt;
-
-    const result = state.activeResult;
-    const totalExploredSteps = result.steps.length;
-    const totalPathSteps = result.path.length;
-
-    let stepsToAdvance = Math.floor(state.stepAccumulator);
-    if (stepsToAdvance > 0) {
-      state.stepAccumulator -= stepsToAdvance;
-    }
-
-    // Advance exploration steps first, then final path reveal
-    while (stepsToAdvance > 0) {
-      if (state.exploredStepCursor < totalExploredSteps) {
-        const step = result.steps[state.exploredStepCursor++];
-        const key = cellKey(step.current.r, step.current.c);
-        state.frontierSet.delete(key);
-        state.exploredSet.add(key);
-        state.exploredCells.push(step.current);
-        state.currentHeadKey = key;
-
-        for (const d of step.discovered) {
-          const dk = cellKey(d.r, d.c);
-          if (!state.exploredSet.has(dk)) {
-            state.frontierSet.add(dk);
-          }
-        }
-        stepsToAdvance--;
-      } else if (result.found && state.pathStepCursor < totalPathSteps) {
-        state.currentHeadKey = null;
-        // Reveal path smoothly at least 2x faster than slow crawl
-        state.pathStepCursor = Math.min(totalPathSteps, state.pathStepCursor + Math.max(1, Math.ceil(stepsToAdvance * 0.5)));
-        stepsToAdvance = 0;
-      } else {
-        break;
-      }
-    }
-
-    updateAiHud();
-    render();
-
-    const explorationDone = state.exploredStepCursor >= totalExploredSteps;
-    const pathDone = !result.found || state.pathStepCursor >= totalPathSteps;
-
-    if (explorationDone && pathDone) {
-      handleAnimationLegComplete();
-    } else {
-      state.rafId = requestAnimationFrame(tickAnimation);
-    }
-  }
-
-  function handleAnimationLegComplete() {
-    const result = state.activeResult;
-    state.currentHeadKey = null;
-    state.frontierSet.clear();
-
-    if (state.isRacing) {
-      state.raceResults.push(result);
-      renderLeaderboard();
-
-      if (state.raceIndex + 1 < state.raceQueue.length) {
-        // Brief 380ms pause between race legs so user can visually absorb each path
-        setStatus(`${ALGO_META[result.algo].name} 完成！準備下一位選手...`, "running");
-        state.raceTimerId = setTimeout(() => {
-          state.raceTimerId = null;
-          if (state.isRacing) {
-            beginRaceLeg(state.raceIndex + 1);
-          }
-        }, 380);
-      } else {
-        finishWholeRace();
-      }
-      return;
-    }
-
-    // Single algorithm completion: upsert into leaderboard too
+    state.selectedLeaderboardAlgo = algoId;
+    state.activeAlgoId = algoId;
+    state.activeResult = target;
+    state.singleTrack = createTrack(target, true);
     state.animStatus = "finished";
-    upsertSingleResultIntoLeaderboard(result);
-    state.selectedLeaderboardAlgo = result.algo;
+
+    setArenaView("single");
     renderLeaderboard();
     updatePlaybackButtons();
     updateAiHud();
-    render();
-
-    const meta = ALGO_META[result.algo];
-    setStatus(
-      result.found
-        ? `搜尋完成：${meta.name}（探索 ${result.exploredCount} 格，路徑 ${result.pathLength} 步）`
-        : `搜尋完成：${meta.name} 未找到出口`,
-      "idle"
-    );
+    renderCurrentView();
+    setStatus(`大圖檢視：${ALGO_META[algoId].fullName}`, "idle");
+    setInsight(`${ALGO_META[algoId].name}：探索 ${target.exploredCount} 格，路徑 ${target.pathLength} 步，總成本 ${target.totalCost}。`);
   }
 
   // =========================================================================
@@ -1195,16 +1557,14 @@
   // =========================================================================
   function upsertSingleResultIntoLeaderboard(result) {
     const idx = state.raceResults.findIndex((r) => r.algo === result.algo);
-    if (idx >= 0) {
-      state.raceResults[idx] = result;
-    } else {
-      state.raceResults.push(result);
-    }
+    if (idx >= 0) state.raceResults[idx] = result;
+    else state.raceResults.push(result);
   }
 
   function getSortedRaceResults() {
     return [...state.raceResults].sort((a, b) => {
       if (a.found !== b.found) return a.found ? -1 : 1;
+      if (a.totalCost !== b.totalCost) return a.totalCost - b.totalCost;
       if (a.pathLength !== b.pathLength) return a.pathLength - b.pathLength;
       if (a.exploredCount !== b.exploredCount) return a.exploredCount - b.exploredCount;
       return a.elapsedMs - b.elapsedMs;
@@ -1216,7 +1576,7 @@
     if (results.length === 0) {
       dom.leaderboardBody.innerHTML = `
         <tr class="empty-row">
-          <td colspan="6">點擊「一鍵競賽」或執行單一演算法後，數據將即時統計於此</td>
+          <td colspan="7">點擊「一鍵同時競速」或執行單一演算法後，數據將即時統計於此</td>
         </tr>
       `;
       return;
@@ -1229,8 +1589,8 @@
         const rankClass = rank <= 3 ? `rank-${rank}` : "";
         const selectedClass = state.selectedLeaderboardAlgo === res.algo ? "selected-row" : "";
         const foundBadge = res.found
-          ? `<span class="status-found">✓ 已找到</span>`
-          : `<span class="status-missing">✕ 未找到</span>`;
+          ? `<span class="status-found">✓ 已抵達</span>`
+          : `<span class="status-missing">✕ 無路</span>`;
 
         return `
           <tr class="result-row ${selectedClass}" data-algo="${res.algo}">
@@ -1243,6 +1603,7 @@
             </td>
             <td>${res.exploredCount} 格</td>
             <td>${res.found ? `${res.pathLength} 步` : "--"}</td>
+            <td>${res.found ? `${res.totalCost}` : "--"}</td>
             <td>${formatMs(res.elapsedMs)}</td>
             <td>${foundBadge}</td>
           </tr>
@@ -1250,31 +1611,110 @@
       })
       .join("");
 
-    // Bind row clicks to inspect that algorithm's result on canvas
     dom.leaderboardBody.querySelectorAll(".result-row").forEach((row) => {
-      row.addEventListener("click", () => {
-        if (state.isRacing || state.animStatus === "running") return;
-        const algoId = row.dataset.algo;
-        const target = state.raceResults.find((r) => r.algo === algoId);
-        if (target) {
-          state.selectedLeaderboardAlgo = algoId;
-          displayCompletedResult(target);
-          renderLeaderboard();
-          setStatus(`檢視結果：${ALGO_META[algoId].fullName}`, "idle");
-        }
-      });
+      row.addEventListener("click", () => inspectAlgorithmOnSingleCanvas(row.dataset.algo));
     });
+
+    if (state.viewMode === "race") {
+      resizeAllCanvases();
+    }
   }
 
   // =========================================================================
-  // Manual Challenge Mode
+  // Canvas Interactive Terrain Editor
   // =========================================================================
+  function getCanvasCellFromPointer(evt) {
+    const rect = dom.canvas.getBoundingClientRect();
+    const x = evt.clientX - rect.left;
+    const y = evt.clientY - rect.top;
+    const width = rect.width;
+    const padding = Math.max(5, Math.floor(width * 0.025));
+    const cellSize = (width - padding * 2) / state.size;
+    const c = Math.floor((x - padding) / cellSize);
+    const r = Math.floor((y - padding) / cellSize);
+
+    if (r < 0 || r >= state.size || c < 0 || c >= state.size) return null;
+    return { r, c };
+  }
+
+  function applyBrushAtCell(r, c) {
+    const n = state.size;
+    if ((r === 0 && c === 0) || (r === n - 1 && c === n - 1)) return;
+    const cell = state.grid[r][c];
+    let changed = false;
+
+    if (state.brush === "wall" && cell.type !== "wall") {
+      cell.type = "wall";
+      changed = true;
+    } else if (state.brush === "swamp" && cell.type !== "swamp") {
+      cell.type = "swamp";
+      changed = true;
+    } else if (state.brush === "clear") {
+      if (cell.type !== "normal") {
+        cell.type = "normal";
+        changed = true;
+      }
+      // Also carve open walls to walkable neighbors so eraser feels natural
+      for (const dir of DIRS) {
+        const nr = r + dir.dr;
+        const nc = c + dir.dc;
+        if (nr >= 0 && nr < n && nc >= 0 && nc < n && cell.walls[dir.key]) {
+          cell.walls[dir.key] = false;
+          state.grid[nr][nc].walls[dir.opp] = false;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      resetAiState(false);
+      renderCurrentView();
+    }
+  }
+
+  // =========================================================================
+  // Manual Challenge Mode & Local Best Records
+  // =========================================================================
+  function loadBestRecords() {
+    try {
+      const raw = localStorage.getItem(BEST_RECORD_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveBestRecord(size, cost, steps, sec) {
+    try {
+      const records = loadBestRecords();
+      const key = String(size);
+      const prev = records[key];
+      if (!prev || cost < prev.cost || (cost === prev.cost && sec < prev.sec)) {
+        records[key] = { cost, steps, sec: Number(sec.toFixed(2)) };
+        localStorage.setItem(BEST_RECORD_KEY, JSON.stringify(records));
+      }
+    } catch {
+      // Ignore storage restriction in private/file mode
+    }
+  }
+
+  function renderBestRecordBadge() {
+    const key = String(state.size);
+    dom.bestRecordSize.textContent = `${state.size}×${state.size}`;
+    const records = loadBestRecords();
+    const rec = records[key];
+    dom.bestRecordText.textContent = rec
+      ? `成本 ${rec.cost}（${rec.steps} 步 / ${rec.sec.toFixed(2)} 秒）`
+      : "尚無紀錄";
+  }
+
   function resetManualChallenge() {
     stopLoop();
     const m = state.manual;
     m.r = 0;
     m.c = 0;
     m.steps = 0;
+    m.cost = 0;
     m.trail = [{ r: 0, c: 0 }];
     m.visitedSet = new Set(["0,0"]);
     m.started = false;
@@ -1288,12 +1728,15 @@
     dom.manualResultCard.classList.add("hidden");
     dom.toggleOptimalPathBtn.textContent = "在迷宮上顯示電腦最佳路徑";
     dom.manualOptimalHint.textContent = "完賽後揭曉";
+    renderBestRecordBadge();
     updateManualHud();
 
     if (state.mode === "manual") {
+      setArenaView("single");
       setStatus("手動挑戰就緒：按方向鍵或 WASD 移動", "idle");
+      setInsight("手動模式：試著找出成本最低的路徑，完成後將與 A* 演算法直接對比！");
     }
-    render();
+    renderCurrentView();
   }
 
   function updateManualHud() {
@@ -1301,7 +1744,7 @@
     const n = state.size;
     const dist = Math.abs(n - 1 - m.r) + Math.abs(n - 1 - m.c);
 
-    dom.manualSteps.textContent = `${m.steps} 步`;
+    dom.manualSteps.textContent = m.cost !== m.steps ? `${m.steps} 步 / 成本 ${m.cost}` : `${m.steps} 步`;
     dom.manualTimer.textContent = `${(m.elapsedMs / 1000).toFixed(2)} 秒`;
     dom.manualDist.textContent = `${dist} 格`;
   }
@@ -1320,7 +1763,7 @@
     if (m.bumpAlpha > 0.01) {
       m.bumpAlpha *= 0.82;
       if (m.bumpAlpha <= 0.01) m.bumpAlpha = 0;
-      render();
+      renderCurrentView();
       needsNextFrame = true;
     }
 
@@ -1333,41 +1776,35 @@
 
   function movePlayer(dirKey) {
     if (state.mode !== "manual" || state.manual.finished) return;
-
     const dir = DIRS.find((d) => d.key === dirKey);
     if (!dir) return;
 
     const m = state.manual;
     const n = state.size;
-    const cell = state.grid[m.r][m.c];
 
-    if (cell.walls[dir.key]) {
+    if (!canPass(state.grid, n, m.r, m.c, dir)) {
       m.bumpAlpha = 1;
-      render();
-      if (state.rafId === null) {
-        state.rafId = requestAnimationFrame(tickManualLoop);
-      }
+      renderCurrentView();
+      if (state.rafId === null) state.rafId = requestAnimationFrame(tickManualLoop);
       return;
     }
 
-    // Start stopwatch on first valid move
     if (!m.started) {
       m.started = true;
       m.startTime = performance.now();
       setStatus("手動挑戰計時中...", "running");
-      if (state.rafId === null) {
-        state.rafId = requestAnimationFrame(tickManualLoop);
-      }
+      if (state.rafId === null) state.rafId = requestAnimationFrame(tickManualLoop);
     }
 
     m.r += dir.dr;
     m.c += dir.dc;
     m.steps += 1;
+    m.cost += getEnterCost(state.grid, m.r, m.c);
     m.trail.push({ r: m.r, c: m.c });
     m.visitedSet.add(cellKey(m.r, m.c));
 
     updateManualHud();
-    render();
+    renderCurrentView();
 
     if (m.r === n - 1 && m.c === n - 1) {
       completeManualChallenge();
@@ -1380,37 +1817,41 @@
     m.elapsedMs = m.started ? performance.now() - m.startTime : 0;
     stopLoop();
 
-    // Compute AI optimal path (A*) on the exact same maze
     const optimal = executeAlgorithmTimed("astar");
     m.optimalResult = optimal;
 
-    const playerSteps = m.steps;
-    const optSteps = optimal.pathLength;
-    const diff = playerSteps - optSteps;
-    const efficiency = optSteps > 0 ? Math.min(100, Math.round((optSteps / playerSteps) * 100)) : 100;
+    const optCost = optimal.found ? optimal.totalCost : m.cost;
+    const optSteps = optimal.found ? optimal.pathLength : m.steps;
+    const diffCost = m.cost - optCost;
+    const efficiency = optCost > 0 ? Math.min(100, Math.round((optCost / m.cost) * 100)) : 100;
+    const sec = m.elapsedMs / 1000;
 
-    dom.manualOptimalHint.textContent = `${optSteps} 步`;
-    dom.resPlayerSteps.textContent = `${playerSteps} 步`;
-    dom.resOptimalSteps.textContent = `${optSteps} 步`;
-    dom.resPlayerTime.textContent = `${(m.elapsedMs / 1000).toFixed(2)} 秒`;
+    saveBestRecord(state.size, m.cost, m.steps, sec);
+    renderBestRecordBadge();
+
+    dom.manualOptimalHint.textContent = `成本 ${optCost}`;
+    dom.resPlayerSteps.textContent = `${m.steps} 步 / 成本 ${m.cost}`;
+    dom.resOptimalSteps.textContent = `${optSteps} 步 / 成本 ${optCost}`;
+    dom.resPlayerTime.textContent = `${sec.toFixed(2)} 秒`;
     dom.resAiTime.textContent = formatMs(optimal.elapsedMs);
     dom.resEfficiency.textContent = `${efficiency}%`;
     dom.resEfficiencyBar.style.width = `${efficiency}%`;
 
-    if (diff === 0) {
-      dom.manualGradeText.textContent = "完美通關！你的路線與電腦最佳路徑完全一致！";
+    if (diffCost === 0) {
+      dom.manualGradeText.textContent = "完美最佳解！你的總成本與電腦最佳路徑完全一致！";
     } else {
-      dom.manualGradeText.textContent = `比電腦最佳路徑多走了 ${diff} 步，可點擊下方按鈕比對差異`;
+      dom.manualGradeText.textContent = `比電腦最佳路線多花費 ${diffCost} 點成本，可點擊下方按鈕比對差異`;
     }
 
     dom.manualResultCard.classList.remove("hidden");
     updateManualHud();
-    setStatus(`挑戰完成！共 ${playerSteps} 步（AI 最佳 ${optSteps} 步）`, "idle");
-    render();
+    setStatus(`挑戰完成！${m.steps} 步（成本 ${m.cost} vs 電腦 ${optCost}）`, "idle");
+    setInsight(`人機對比：你花費 ${sec.toFixed(2)} 秒、成本 ${m.cost}；A* 花費 ${formatMs(optimal.elapsedMs)} 找到成本 ${optCost} 的路線。`);
+    renderCurrentView();
   }
 
   // =========================================================================
-  // Mode Switching & Maze Regeneration
+  // Mode Switching, Presets & Maze Lifecycle
   // =========================================================================
   function switchMode(newMode) {
     if (state.mode === newMode) return;
@@ -1437,74 +1878,231 @@
     if (isAi) {
       resetAiState(true);
     } else {
+      setArenaView("single");
       resetManualChallenge();
     }
   }
 
-  function createNewMaze() {
-    state.grid = generateMaze(state.size);
+  function updatePresetButtonsUI() {
+    dom.presetBtns.forEach((b) => b.classList.toggle("active", b.dataset.preset === state.preset));
+    dom.sizeBtns.forEach((b) => b.classList.toggle("active", Number(b.dataset.size) === state.size));
+  }
+
+  function buildMazeFromState() {
+    if (state.preset === "utrap") {
+      state.size = 20;
+      state.grid = generateUTrapPreset();
+      dom.mazeSeedMeta.textContent = "關卡 U-TRAP";
+      dom.seedInput.value = "U-TRAP";
+    } else if (state.preset === "swamp") {
+      state.size = 20;
+      state.grid = generateSwampPreset();
+      dom.mazeSeedMeta.textContent = "關卡 SWAMP";
+      dom.seedInput.value = "SWAMP";
+    } else {
+      state.grid = generateRandomMaze(state.size, state.seed);
+      dom.mazeSeedMeta.textContent = `關卡 #${state.seed}`;
+      dom.seedInput.value = String(state.seed);
+    }
+
+    updatePresetButtonsUI();
     dom.mazeMeta.textContent = `尺寸：${state.size} × ${state.size}`;
     resetAiState(false);
     resetManualChallenge();
+
     if (state.mode === "ai") {
-      setStatus(`已生成 ${state.size}×${state.size} 隨機迷宮`, "idle");
-    } else {
-      setStatus(`已生成 ${state.size}×${state.size} 迷宮：請用方向鍵或 WASD 開始`, "idle");
+      if (state.preset === "utrap") {
+        setStatus("已載入「U 型陷阱」示範關卡", "idle");
+        setInsight("示範重點：觀察 DFS 容易鑽進 U 型口袋，而 BFS / A* 如何繞過障礙找到出口。");
+      } else if (state.preset === "swamp") {
+        setStatus("已載入「泥沼捷徑」示範關卡（泥沼每格成本 ×5）", "idle");
+        setInsight("示範重點：點「一鍵同時競速」看 BFS 踩進泥沼 vs A* 聰明繞道省成本！");
+      } else {
+        setStatus(`已生成 ${state.size}×${state.size} 迷宮（代碼 #${state.seed}）`, "idle");
+      }
     }
-    render();
+    renderCurrentView();
   }
 
-  function updateSpeedLabel() {
-    const v = Number(dom.speedSlider.value);
+  function loadInitialFromHash() {
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash) return false;
+    const params = new URLSearchParams(hash);
+    const s = Number(params.get("size"));
+    const seed = params.get("seed");
+    const preset = params.get("preset");
+
+    if ([10, 20, 40].includes(s)) state.size = s;
+    if (["random", "utrap", "swamp"].includes(preset)) state.preset = preset;
+    if (seed) state.seed = hashSeedText(seed);
+    return true;
+  }
+
+  function updateSpeedLabel(sourceVal) {
+    const v = Number(sourceVal !== undefined ? sourceVal : dom.speedSlider.value);
     state.speed = v;
+    dom.speedSlider.value = String(v);
+    dom.raceSpeedSlider.value = String(v);
     let label = "標準";
     if (v < 25) label = "慢速";
     else if (v >= 80) label = "極速";
     else if (v >= 60) label = "快速";
-    dom.speedValue.textContent = `${label} (${v})`;
+    const text = `${label} (${v})`;
+    dom.speedValue.textContent = text;
+    dom.raceSpeedBadge.textContent = text;
   }
 
   // =========================================================================
   // Event Listeners
   // =========================================================================
   function bindEvents() {
-    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("resize", resizeAllCanvases);
+    if (typeof ResizeObserver !== "undefined") {
+      let resizeRaf = null;
+      const ro = new ResizeObserver(() => {
+        if (resizeRaf !== null) cancelAnimationFrame(resizeRaf);
+        resizeRaf = requestAnimationFrame(() => {
+          resizeRaf = null;
+          resizeAllCanvases();
+        });
+      });
+      ro.observe(dom.canvasWrapper);
+      ro.observe(dom.raceGrid);
+    }
 
     dom.modeAiBtn.addEventListener("click", () => switchMode("ai"));
     dom.modeManualBtn.addEventListener("click", () => switchMode("manual"));
 
     dom.sizeBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
-        const newSize = Number(btn.dataset.size);
-        if (newSize === state.size) return;
-        dom.sizeBtns.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.size = newSize;
-        createNewMaze();
+        state.size = Number(btn.dataset.size);
+        state.preset = "random";
+        state.seed = randomSeed();
+        buildMazeFromState();
       });
     });
 
-    dom.generateMazeBtn.addEventListener("click", createNewMaze);
+    dom.presetBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.preset = btn.dataset.preset;
+        if (state.preset === "random") state.seed = randomSeed();
+        buildMazeFromState();
+      });
+    });
 
+    dom.generateMazeBtn.addEventListener("click", () => {
+      state.preset = "random";
+      state.seed = randomSeed();
+      buildMazeFromState();
+    });
+
+    dom.loadSeedBtn.addEventListener("click", () => {
+      const val = dom.seedInput.value.trim().toUpperCase();
+      if (!val) return;
+      if (val === "U-TRAP") {
+        state.preset = "utrap";
+      } else if (val === "SWAMP") {
+        state.preset = "swamp";
+      } else {
+        state.preset = "random";
+        state.seed = hashSeedText(val);
+      }
+      buildMazeFromState();
+    });
+
+    dom.copyShareBtn.addEventListener("click", () => {
+      const hash = `size=${state.size}&preset=${state.preset}&seed=${state.seed}`;
+      window.location.hash = hash;
+      const url = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(
+          () => setStatus("已複製同關卡分享連結！可貼給同學 PK 同一張迷宮", "idle"),
+          () => setStatus("網址列已更新為本關卡代碼，可直接複製網址分享", "idle")
+        );
+      } else {
+        setStatus("網址列已更新為本關卡代碼，可直接複製網址分享", "idle");
+      }
+    });
+
+    // Brush editor events
+    dom.brushBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        dom.brushBtns.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.brush = btn.dataset.brush;
+        dom.canvasWrapper.classList.toggle("editing", state.brush !== "none");
+      });
+    });
+
+    dom.clearCustomBtn.addEventListener("click", () => {
+      for (let r = 0; r < state.size; r++) {
+        for (let c = 0; c < state.size; c++) {
+          state.grid[r][c].type = "normal";
+        }
+      }
+      resetAiState(false);
+      renderCurrentView();
+      setStatus("已清空所有障礙牆與泥沼地形", "idle");
+    });
+
+    dom.canvas.addEventListener("pointerdown", (e) => {
+      if (state.mode !== "ai" || state.brush === "none" || state.animStatus === "running") return;
+      state.isPainting = true;
+      const cell = getCanvasCellFromPointer(e);
+      if (cell) applyBrushAtCell(cell.r, cell.c);
+    });
+
+    dom.canvas.addEventListener("pointermove", (e) => {
+      if (!state.isPainting || state.brush === "none") return;
+      const cell = getCanvasCellFromPointer(e);
+      if (cell) applyBrushAtCell(cell.r, cell.c);
+    });
+
+    window.addEventListener("pointerup", () => {
+      state.isPainting = false;
+    });
+
+    // Algorithm selection & playback
     dom.algoBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
         if (state.isRacing) return;
         dom.algoBtns.forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         state.selectedAlgo = btn.dataset.algo;
-        if (state.animStatus === "idle" || state.animStatus === "finished") {
-          state.activeAlgoId = state.selectedAlgo;
-          resetAiState(true);
-        }
+        state.activeAlgoId = state.selectedAlgo;
+        resetAiState(true);
       });
     });
 
     dom.startBtn.addEventListener("click", startSingleAlgorithm);
     dom.pauseBtn.addEventListener("click", togglePauseAnimation);
     dom.resetBtn.addEventListener("click", () => resetAiState(true));
-    dom.speedSlider.addEventListener("input", updateSpeedLabel);
+    dom.speedSlider.addEventListener("input", () => updateSpeedLabel(dom.speedSlider.value));
+    dom.raceSpeedSlider.addEventListener("input", () => updateSpeedLabel(dom.raceSpeedSlider.value));
     dom.raceBtn.addEventListener("click", startRace);
+    dom.raceReplayBtn.addEventListener("click", startRace);
+    dom.racePauseBtn.addEventListener("click", togglePauseAnimation);
     dom.skipRaceBtn.addEventListener("click", skipRaceAnimation);
+    dom.raceSkipBarBtn.addEventListener("click", skipRaceAnimation);
+
+    dom.backToSingleBtn.addEventListener("click", () => {
+      const targetAlgo = state.selectedLeaderboardAlgo || state.selectedAlgo;
+      if (state.raceResults.some((r) => r.algo === targetAlgo)) {
+        inspectAlgorithmOnSingleCanvas(targetAlgo);
+      } else {
+        setArenaView("single");
+        renderCurrentView();
+      }
+    });
+
+    dom.raceCards.forEach((card) => {
+      card.addEventListener("click", () => {
+        const algoId = card.dataset.raceAlgo;
+        if (!state.isRacing && state.raceResults.some((r) => r.algo === algoId)) {
+          inspectAlgorithmOnSingleCanvas(algoId);
+        }
+      });
+    });
 
     // Manual D-pad & reset
     dom.dpadBtns.forEach((btn) => {
@@ -1517,12 +2115,12 @@
       dom.toggleOptimalPathBtn.textContent = state.manual.showOptimal
         ? "隱藏電腦最佳路徑"
         : "在迷宮上顯示電腦最佳路徑";
-      render();
+      renderCurrentView();
     });
 
-    // Keyboard navigation for manual mode
     window.addEventListener("keydown", (e) => {
       if (state.mode !== "manual") return;
+      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
       const keyMap = {
         ArrowUp: "top",
         w: "top",
@@ -1537,7 +2135,6 @@
         a: "left",
         A: "left"
       };
-
       const dirKey = keyMap[e.key];
       if (dirKey) {
         e.preventDefault();
@@ -1552,10 +2149,11 @@
   function init() {
     bindEvents();
     updateSpeedLabel();
-    state.grid = generateMaze(state.size);
-    resizeCanvas();
-    updateAiHud();
-    updatePlaybackButtons();
+    if (!loadInitialFromHash()) {
+      state.seed = randomSeed();
+    }
+    buildMazeFromState();
+    resizeAllCanvases();
   }
 
   init();

@@ -3,13 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI 智慧迷宮：路徑搜尋與演算法競賽</title>
+  <title>迷宮尋路實驗室｜電腦入門與程式思維 第二組專題</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="bg-grid" aria-hidden="true"></div>
-  <div class="bg-glow bg-glow-1" aria-hidden="true"></div>
-  <div class="bg-glow bg-glow-2" aria-hidden="true"></div>
 
   <div class="app-shell">
     <!-- Top Header -->
@@ -19,20 +17,20 @@
           <svg viewBox="0 0 32 32" fill="none">
             <rect x="3" y="3" width="26" height="26" rx="6" stroke="currentColor" stroke-width="2"/>
             <path d="M9 9H17V15H13V23H23" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="9" cy="9" r="2.2" fill="#22d3ee"/>
-            <circle cx="23" cy="23" r="2.2" fill="#10b981"/>
+            <circle cx="9" cy="9" r="2.2" fill="#38bdf8"/>
+            <circle cx="23" cy="23" r="2.2" fill="#34d399"/>
           </svg>
         </div>
-        <div>
-          <div class="brand-tag">PATHFINDING LAB // VISUALIZER</div>
-          <h1>AI 智慧迷宮：路徑搜尋與演算法競賽</h1>
+        <div class="brand-text">
+          <span class="brand-tag">電腦入門與程式思維・第二組 期末專題</span>
+          <h1>迷宮尋路實驗室：演算法思維與人機挑戰</h1>
         </div>
       </div>
 
       <nav class="mode-switcher" aria-label="運作模式切換">
         <button type="button" id="modeAiBtn" class="mode-btn active" data-mode="ai">
           <span class="dot dot-cyan"></span>
-          AI 演算法模式
+          演算法實驗模式
         </button>
         <button type="button" id="modeManualBtn" class="mode-btn" data-mode="manual">
           <span class="dot dot-amber"></span>
@@ -48,34 +46,38 @@
         <div class="arena-topbar">
           <div class="status-pill" id="statusPill">
             <span class="pulse-dot"></span>
-            <span id="statusText">就緒：請選擇演算法或開始競賽</span>
+            <span id="statusText">就緒：選擇演算法、編輯地形或直接同時競速</span>
           </div>
-          <div class="maze-meta" id="mazeMeta">尺寸：20 × 20</div>
+          <div class="arena-meta-group">
+            <span class="maze-meta" id="mazeMeta">尺寸：20 × 20</span>
+            <span class="maze-meta seed-pill" id="mazeSeedMeta" title="同一組關卡代碼可產生完全相同的迷宮">關卡 #0000</span>
+          </div>
         </div>
 
-        <!-- Live Telemetry HUD -->
+        <!-- Live Telemetry HUD (AI Mode) -->
         <div class="hud-strip" id="aiHud">
           <div class="hud-item">
-            <span class="hud-label">當前演算法</span>
-            <span class="hud-value" id="hudAlgo">A* 星演算法</span>
+            <span class="hud-label">當前檢視</span>
+            <span class="hud-value" id="hudAlgo">A* 搜尋演算法</span>
           </div>
           <div class="hud-item">
             <span class="hud-label">已探索節點</span>
             <span class="hud-value accent-cyan" id="hudExplored">0 格</span>
           </div>
           <div class="hud-item">
-            <span class="hud-label">最終路徑</span>
-            <span class="hud-value accent-emerald" id="hudPath">-- 步</span>
+            <span class="hud-label">路徑步數 / 成本</span>
+            <span class="hud-value accent-emerald" id="hudPath">--</span>
           </div>
           <div class="hud-item">
             <span class="hud-label">運算耗時</span>
-            <span class="hud-value accent-violet" id="hudTime">-- ms</span>
+            <span class="hud-value accent-rose" id="hudTime">-- ms</span>
           </div>
         </div>
 
+        <!-- Live Telemetry HUD (Manual Mode) -->
         <div class="hud-strip hidden" id="manualHud">
           <div class="hud-item">
-            <span class="hud-label">目前步數</span>
+            <span class="hud-label">目前步數 / 成本</span>
             <span class="hud-value accent-amber" id="manualSteps">0 步</span>
           </div>
           <div class="hud-item">
@@ -83,117 +85,198 @@
             <span class="hud-value accent-cyan" id="manualTimer">0.00 秒</span>
           </div>
           <div class="hud-item">
-            <span class="hud-label">距離終點</span>
-            <span class="hud-value accent-violet" id="manualDist">-- 格</span>
+            <span class="hud-label">直線估距</span>
+            <span class="hud-value accent-rose" id="manualDist">-- 格</span>
           </div>
           <div class="hud-item">
-            <span class="hud-label">最佳基準</span>
+            <span class="hud-label">電腦最佳成本</span>
             <span class="hud-value accent-emerald" id="manualOptimalHint">完賽後揭曉</span>
           </div>
         </div>
 
-        <!-- Canvas Frame -->
+        <!-- Live Algorithm Thinking / Data Structure Insight -->
+        <div class="insight-bar" id="insightBar">
+          <span class="insight-tag">程式思維透視</span>
+          <span id="insightText">待機中：點選「開始」觀察資料結構變化，或點「同時競速」三路對決。</span>
+        </div>
+
+        <!-- Interactive Map Editor Toolbar (Single Canvas View) -->
+        <div class="editor-toolbar" id="editorToolbar">
+          <span class="editor-label">畫布編輯：</span>
+          <div class="brush-group" role="group" aria-label="地形畫筆">
+            <button type="button" class="brush-btn active" data-brush="none" title="只檢視，點擊畫布不修改">檢視</button>
+            <button type="button" class="brush-btn" data-brush="wall" title="點擊或拖曳設置實心障礙牆">＋障礙牆</button>
+            <button type="button" class="brush-btn" data-brush="swamp" title="泥沼地形：通過一格需花費 5 點成本">＋泥沼 (×5)</button>
+            <button type="button" class="brush-btn" data-brush="clear" title="清除障礙牆／泥沼，並打通相鄰通道">橡皮擦</button>
+          </div>
+          <button type="button" id="clearCustomBtn" class="btn-mini" title="清除所有自訂障礙與泥沼">清空地形</button>
+        </div>
+
+        <!-- Single Main Canvas Container -->
         <div class="canvas-wrapper" id="canvasWrapper">
-          <div class="corner corner-tl"></div>
-          <div class="corner corner-tr"></div>
-          <div class="corner corner-bl"></div>
-          <div class="corner corner-br"></div>
-          <canvas id="mazeCanvas" width="600" height="600"></canvas>
+          <canvas id="mazeCanvas" width="480" height="480"></canvas>
+        </div>
+
+        <!-- 3-Way Simultaneous Race Container -->
+        <div class="race-grid hidden" id="raceGrid">
+          <div class="race-card" data-race-algo="bfs">
+            <div class="race-card-head">
+              <span class="algo-cell"><span class="algo-dot algo-bfs"></span>BFS 廣度優先</span>
+              <span class="race-stat" id="raceStatBfs">準備中</span>
+            </div>
+            <div class="race-canvas-box">
+              <canvas id="raceCanvasBfs" width="360" height="360"></canvas>
+            </div>
+            <div class="race-card-foot" id="raceFootBfs">探索：0 格 ｜ 成本：--</div>
+          </div>
+
+          <div class="race-card" data-race-algo="dfs">
+            <div class="race-card-head">
+              <span class="algo-cell"><span class="algo-dot algo-dfs"></span>DFS 深度優先</span>
+              <span class="race-stat" id="raceStatDfs">準備中</span>
+            </div>
+            <div class="race-canvas-box">
+              <canvas id="raceCanvasDfs" width="360" height="360"></canvas>
+            </div>
+            <div class="race-card-foot" id="raceFootDfs">探索：0 格 ｜ 成本：--</div>
+          </div>
+
+          <div class="race-card" data-race-algo="astar">
+            <div class="race-card-head">
+              <span class="algo-cell"><span class="algo-dot algo-astar"></span>A* 搜尋演算法</span>
+              <span class="race-stat" id="raceStatAstar">準備中</span>
+            </div>
+            <div class="race-canvas-box">
+              <canvas id="raceCanvasAstar" width="360" height="360"></canvas>
+            </div>
+            <div class="race-card-foot" id="raceFootAstar">探索：0 格 ｜ 成本：--</div>
+          </div>
+        </div>
+
+        <div class="race-view-switch hidden" id="raceViewSwitch">
+          <div class="race-bar-controls">
+            <button type="button" id="raceReplayBtn" class="btn btn-race btn-sm">再競速一次</button>
+            <button type="button" id="racePauseBtn" class="btn btn-outline btn-sm">暫停</button>
+            <button type="button" id="raceSkipBarBtn" class="btn btn-outline btn-sm hidden">跳過動畫</button>
+            <div class="race-speed-inline">
+              <label for="raceSpeedSlider">速度</label>
+              <input type="range" id="raceSpeedSlider" min="1" max="100" value="50" />
+              <span id="raceSpeedBadge" class="speed-badge">標準 (50)</span>
+            </div>
+            <button type="button" id="backToSingleBtn" class="btn btn-secondary btn-sm">
+              返回單一大圖與設定
+            </button>
+          </div>
         </div>
 
         <!-- Legend -->
         <div class="legend-bar" aria-label="圖例說明">
-          <div class="legend-item"><span class="swatch swatch-start"></span>起點 (左上)</div>
-          <div class="legend-item"><span class="swatch swatch-end"></span>終點 (右下)</div>
+          <div class="legend-item"><span class="swatch swatch-start"></span>起點</div>
+          <div class="legend-item"><span class="swatch swatch-end"></span>終點</div>
+          <div class="legend-item"><span class="swatch swatch-wall"></span>障礙牆</div>
+          <div class="legend-item"><span class="swatch swatch-swamp"></span>泥沼(×5)</div>
           <div class="legend-item" id="legendExplored"><span class="swatch swatch-explored"></span>探索區域</div>
           <div class="legend-item" id="legendFrontier"><span class="swatch swatch-frontier"></span>搜尋前線</div>
           <div class="legend-item" id="legendPath"><span class="swatch swatch-path"></span>最終路徑</div>
           <div class="legend-item hidden" id="legendPlayer"><span class="swatch swatch-player"></span>玩家軌跡</div>
-          <div class="legend-item hidden" id="legendOptimal"><span class="swatch swatch-optimal"></span>AI 最佳路徑</div>
+          <div class="legend-item hidden" id="legendOptimal"><span class="swatch swatch-optimal"></span>電腦最佳路徑</div>
         </div>
       </section>
 
       <!-- Right: Controls & Leaderboard -->
       <aside class="sidebar">
-        <!-- Maze Generator Card -->
+        <!-- Maze Generator & Presets Card -->
         <section class="card control-card">
           <div class="card-header">
-            <h2>迷宮生成設定</h2>
-            <span class="badge">保證連通</span>
+            <h2>關卡與迷宮設定</h2>
+            <span class="badge">可重現 Seed</span>
           </div>
 
-          <div class="field-group">
-            <label class="field-label">迷宮尺寸</label>
-            <div class="segmented" role="group" aria-label="選擇迷宮大小">
-              <button type="button" class="seg-btn" data-size="10">10 × 10</button>
-              <button type="button" class="seg-btn active" data-size="20">20 × 20</button>
-              <button type="button" class="seg-btn" data-size="40">40 × 40</button>
+          <div class="settings-two-col">
+            <div class="field-group">
+              <label class="field-label">迷宮尺寸</label>
+              <div class="segmented" role="group" aria-label="選擇迷宮大小">
+                <button type="button" class="seg-btn" data-size="10">10×10</button>
+                <button type="button" class="seg-btn active" data-size="20">20×20</button>
+                <button type="button" class="seg-btn" data-size="40">40×40</button>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">示範關卡</label>
+              <div class="preset-row">
+                <button type="button" class="preset-btn active" data-preset="random">隨機迷宮</button>
+                <button type="button" class="preset-btn" data-preset="utrap">U 型陷阱</button>
+                <button type="button" class="preset-btn" data-preset="swamp">泥沼捷徑</button>
+              </div>
             </div>
           </div>
 
-          <button type="button" id="generateMazeBtn" class="btn btn-secondary btn-full">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-              <path d="M3 3v5h5"/>
-              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-              <path d="M16 16h5v5"/>
-            </svg>
-            生成新迷宮
-          </button>
+          <div class="seed-action-row">
+            <input type="text" id="seedInput" class="seed-input" maxlength="10" placeholder="關卡代碼" aria-label="輸入關卡代碼" />
+            <button type="button" id="loadSeedBtn" class="btn btn-ghost btn-sm">載入</button>
+            <button type="button" id="copyShareBtn" class="btn btn-ghost btn-sm" title="複製同關卡分享連結">分享連結</button>
+            <button type="button" id="generateMazeBtn" class="btn btn-secondary btn-sm">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                <path d="M16 16h5v5"/>
+              </svg>
+              生成新迷宮
+            </button>
+          </div>
         </section>
 
         <!-- AI Mode Controls -->
         <section class="card control-card" id="aiControlsPanel">
           <div class="card-header">
-            <h2>尋路演算法控制</h2>
-            <span class="badge badge-cyan">單一執行 / 競賽</span>
+            <h2>演算法控制與對比</h2>
+            <span class="badge badge-cyan">單步觀察 / 同時競速</span>
           </div>
 
           <div class="algo-list" role="radiogroup" aria-label="選擇尋路演算法">
             <button type="button" class="algo-option" data-algo="bfs">
               <div class="algo-head">
                 <span class="algo-dot algo-bfs"></span>
-                <strong>BFS 廣度優先搜尋</strong>
-                <span class="algo-tag">最短路徑</span>
+                <strong>BFS 廣度優先</strong>
+                <span class="algo-tag">Queue</span>
               </div>
-              <p>逐層擴散探索所有相鄰節點，保證找到步數最少的路徑。</p>
+              <p>逐層擴散，無泥沼時步數最少，不會避開高成本格。</p>
             </button>
 
             <button type="button" class="algo-option" data-algo="dfs">
               <div class="algo-head">
                 <span class="algo-dot algo-dfs"></span>
-                <strong>DFS 深度優先搜尋</strong>
-                <span class="algo-tag">深度探索</span>
+                <strong>DFS 深度優先</strong>
+                <span class="algo-tag">Stack</span>
               </div>
-              <p>沿單一分支深入直到死路再回溯，速度快但路徑未必最短。</p>
+              <p>一條路走到底撞牆才回頭，常繞遠路作為對照組。</p>
             </button>
 
             <button type="button" class="algo-option active" data-algo="astar">
               <div class="algo-head">
                 <span class="algo-dot algo-astar"></span>
-                <strong>A* 星演算法</strong>
-                <span class="algo-tag">啟發式最優</span>
+                <strong>A* 搜尋演算法</strong>
+                <span class="algo-tag">f = g + h</span>
               </div>
-              <p>結合已走步數與曼哈頓距離預估，精準朝終點推進並保證最短。</p>
+              <p>結合成本與距離預估，能繞開泥沼並以最少探索破關。</p>
             </button>
           </div>
 
-          <div class="playback-row">
-            <button type="button" id="startBtn" class="btn btn-primary">開始</button>
-            <button type="button" id="pauseBtn" class="btn btn-outline" disabled>暫停</button>
-            <button type="button" id="resetBtn" class="btn btn-ghost">重設</button>
-          </div>
-
-          <div class="speed-control">
-            <div class="speed-header">
-              <label for="speedSlider">動畫速度</label>
-              <span class="speed-badge" id="speedValue">標準 (50)</span>
+          <div class="controls-inline-row">
+            <div class="playback-row">
+              <button type="button" id="startBtn" class="btn btn-primary">開始</button>
+              <button type="button" id="pauseBtn" class="btn btn-outline" disabled>暫停</button>
+              <button type="button" id="resetBtn" class="btn btn-ghost">重設</button>
             </div>
-            <input type="range" id="speedSlider" min="1" max="100" value="50" />
-            <div class="speed-ticks">
-              <span>慢速觀察</span>
-              <span>標準</span>
-              <span>極速</span>
+
+            <div class="speed-control">
+              <div class="speed-header">
+                <label for="speedSlider">速度</label>
+                <span class="speed-badge" id="speedValue">標準 (50)</span>
+              </div>
+              <input type="range" id="speedSlider" min="1" max="100" value="50" />
             </div>
           </div>
 
@@ -202,9 +285,9 @@
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
               </svg>
-              一鍵競賽（BFS vs DFS vs A*）
+              一鍵同時競速（三畫面並排 PK）
             </button>
-            <button type="button" id="skipRaceBtn" class="btn btn-outline btn-full hidden">
+            <button type="button" id="skipRaceBtn" class="btn btn-outline btn-full btn-sm hidden">
               跳過動畫，直接顯示競賽結果
             </button>
           </div>
@@ -214,44 +297,49 @@
         <section class="card control-card hidden" id="manualControlsPanel">
           <div class="card-header">
             <h2>手動挑戰模式</h2>
-            <span class="badge badge-amber">鍵盤操控</span>
+            <span class="badge badge-amber">人機對比</span>
           </div>
 
           <p class="manual-tip">
-            使用鍵盤 <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> 或 <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> 操控光球從左上起點走到右下終點。第一次有效移動時自動開始計時！
+            用鍵盤 <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> 或 <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> 走迷宮；踩進泥沼成本 +5。
           </p>
 
-          <!-- Optional On-Screen D-Pad -->
-          <div class="dpad" aria-label="方向控制盤">
-            <button type="button" class="dpad-btn dpad-up" data-dir="top" aria-label="向上">▲</button>
-            <button type="button" class="dpad-btn dpad-left" data-dir="left" aria-label="向左">◀</button>
-            <button type="button" class="dpad-btn dpad-down" data-dir="bottom" aria-label="向下">▼</button>
-            <button type="button" class="dpad-btn dpad-right" data-dir="right" aria-label="向右">▶</button>
-          </div>
+          <div class="manual-mid-row">
+            <div class="dpad" aria-label="方向控制盤">
+              <button type="button" class="dpad-btn dpad-up" data-dir="top" aria-label="向上">▲</button>
+              <button type="button" class="dpad-btn dpad-left" data-dir="left" aria-label="向左">◀</button>
+              <button type="button" class="dpad-btn dpad-down" data-dir="bottom" aria-label="向下">▼</button>
+              <button type="button" class="dpad-btn dpad-right" data-dir="right" aria-label="向右">▶</button>
+            </div>
 
-          <div class="manual-actions">
-            <button type="button" id="manualResetBtn" class="btn btn-secondary btn-full">
-              重新開始本局挑戰
-            </button>
+            <div class="manual-side-info">
+              <div class="best-record-bar" id="bestRecordBar">
+                <div>本機最佳（<span id="bestRecordSize">20×20</span>）</div>
+                <strong id="bestRecordText">尚無紀錄</strong>
+              </div>
+              <button type="button" id="manualResetBtn" class="btn btn-secondary btn-full btn-sm">
+                重新開始本局挑戰
+              </button>
+            </div>
           </div>
 
           <!-- Manual Victory Comparison Box -->
           <div class="manual-result hidden" id="manualResultCard">
             <div class="result-banner">
-              <span class="result-trophy">🏆</span>
+              <span class="result-trophy">🏁</span>
               <div>
-                <h3>恭喜抵達終點！</h3>
-                <p id="manualGradeText">挑戰完成，以下為與 AI 最佳路徑的對比</p>
+                <h3>抵達終點！挑戰結算</h3>
+                <p id="manualGradeText">以下為你的表現與電腦最佳路線對比</p>
               </div>
             </div>
 
             <div class="compare-grid">
               <div class="compare-box">
-                <span class="compare-label">你的移動步數</span>
+                <span class="compare-label">你的步數 / 總成本</span>
                 <strong class="compare-val accent-amber" id="resPlayerSteps">0 步</strong>
               </div>
               <div class="compare-box">
-                <span class="compare-label">電腦最佳路徑</span>
+                <span class="compare-label">電腦最佳步數 / 成本</span>
                 <strong class="compare-val accent-emerald" id="resOptimalSteps">0 步</strong>
               </div>
               <div class="compare-box">
@@ -259,14 +347,14 @@
                 <strong class="compare-val accent-cyan" id="resPlayerTime">0.00 秒</strong>
               </div>
               <div class="compare-box">
-                <span class="compare-label">AI 運算耗時</span>
-                <strong class="compare-val accent-violet" id="resAiTime">0.00 ms</strong>
+                <span class="compare-label">電腦運算耗時</span>
+                <strong class="compare-val accent-rose" id="resAiTime">0.00 ms</strong>
               </div>
             </div>
 
             <div class="efficiency-bar-wrap">
               <div class="efficiency-label-row">
-                <span>路徑精準度</span>
+                <span>路線成本精準度</span>
                 <strong id="resEfficiency">100%</strong>
               </div>
               <div class="efficiency-track">
@@ -274,7 +362,7 @@
               </div>
             </div>
 
-            <button type="button" id="toggleOptimalPathBtn" class="btn btn-primary btn-full">
+            <button type="button" id="toggleOptimalPathBtn" class="btn btn-primary btn-full btn-sm">
               在迷宮上顯示電腦最佳路徑
             </button>
           </div>
@@ -285,7 +373,7 @@
           <div class="card-header">
             <div>
               <h2>演算法競賽排行榜</h2>
-              <p class="card-subtitle">點擊已完成的列可於畫布重現該演算法結果（耗時為純演算法運算時間）</p>
+              <p class="card-subtitle">點擊任一列可切回單一大圖重現該路線</p>
             </div>
             <span class="badge" id="raceStatusBadge">尚未競賽</span>
           </div>
@@ -296,15 +384,16 @@
                 <tr>
                   <th>排名</th>
                   <th>演算法</th>
-                  <th>探索節點數（格）</th>
-                  <th>最終路徑長度（步）</th>
-                  <th>執行時間（ms）</th>
-                  <th>是否找到出口</th>
+                  <th>探索節點</th>
+                  <th>步數</th>
+                  <th>總成本</th>
+                  <th>運算時間</th>
+                  <th>狀態</th>
                 </tr>
               </thead>
               <tbody id="leaderboardBody">
                 <tr class="empty-row">
-                  <td colspan="6">點擊「一鍵競賽」或執行單一演算法後，數據將即時統計於此</td>
+                  <td colspan="7">點擊「一鍵同時競速」或執行單一演算法後，數據將即時統計於此</td>
                 </tr>
               </tbody>
             </table>
