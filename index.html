@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>迷宮尋路實驗室｜電腦入門與程式思維 第二組專題</title>
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <div class="bg-grid" aria-hidden="true"></div>
@@ -46,7 +46,7 @@
         <div class="arena-topbar">
           <div class="status-pill" id="statusPill">
             <span class="pulse-dot"></span>
-            <span id="statusText">就緒：選擇演算法、編輯地形或直接同時競速</span>
+            <span id="statusText">準備好了，請選擇操作方式</span>
           </div>
           <div class="arena-meta-group">
             <span class="maze-meta" id="mazeMeta">尺寸：20 × 20</span>
@@ -85,7 +85,7 @@
             <span class="hud-value accent-cyan" id="manualTimer">0.00 秒</span>
           </div>
           <div class="hud-item">
-            <span class="hud-label">直線估距</span>
+            <span class="hud-label">距離終點</span>
             <span class="hud-value accent-rose" id="manualDist">-- 格</span>
           </div>
           <div class="hud-item">
@@ -94,10 +94,10 @@
           </div>
         </div>
 
-        <!-- Live Algorithm Thinking / Data Structure Insight -->
+        <!-- Live Algorithm Thinking / Status Insight -->
         <div class="insight-bar" id="insightBar">
-          <span class="insight-tag">程式思維透視</span>
-          <span id="insightText">待機中：點選「開始」觀察資料結構變化，或點「同時競速」三路對決。</span>
+          <span class="insight-tag">即時說明</span>
+          <span id="insightText">點「開始」看單一演算法怎麼找路，或點「一鍵同時競速」一起比較。</span>
         </div>
 
         <!-- Interactive Map Editor Toolbar (Single Canvas View) -->
@@ -186,10 +186,10 @@
       <!-- Right: Controls & Leaderboard -->
       <aside class="sidebar">
         <!-- Maze Generator & Presets Card -->
-        <section class="card control-card">
+        <section class="card control-card settings-card">
           <div class="card-header">
             <h2>關卡與迷宮設定</h2>
-            <span class="badge">可重現 Seed</span>
+            <span class="badge">關卡代碼分享</span>
           </div>
 
           <div class="settings-two-col">
@@ -240,7 +240,7 @@
               <div class="algo-head">
                 <span class="algo-dot algo-bfs"></span>
                 <strong>BFS 廣度優先</strong>
-                <span class="algo-tag">Queue</span>
+                <span class="algo-tag">先進先出</span>
               </div>
               <p>逐層擴散，無泥沼時步數最少，不會避開高成本格。</p>
             </button>
@@ -249,7 +249,7 @@
               <div class="algo-head">
                 <span class="algo-dot algo-dfs"></span>
                 <strong>DFS 深度優先</strong>
-                <span class="algo-tag">Stack</span>
+                <span class="algo-tag">後進先出</span>
               </div>
               <p>一條路走到底撞牆才回頭，常繞遠路作為對照組。</p>
             </button>
@@ -258,7 +258,7 @@
               <div class="algo-head">
                 <span class="algo-dot algo-astar"></span>
                 <strong>A* 搜尋演算法</strong>
-                <span class="algo-tag">f = g + h</span>
+                <span class="algo-tag">成本+估距</span>
               </div>
               <p>結合成本與距離預估，能繞開泥沼並以最少探索破關。</p>
             </button>
@@ -285,7 +285,7 @@
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
               </svg>
-              一鍵同時競速（三畫面並排 PK）
+              一鍵同時競速（三種演算法並排比較）
             </button>
             <button type="button" id="skipRaceBtn" class="btn btn-outline btn-full btn-sm hidden">
               跳過動畫，直接顯示競賽結果
@@ -354,7 +354,7 @@
 
             <div class="efficiency-bar-wrap">
               <div class="efficiency-label-row">
-                <span>路線成本精準度</span>
+                <span>路線效率</span>
                 <strong id="resEfficiency">100%</strong>
               </div>
               <div class="efficiency-track">
@@ -403,6 +403,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

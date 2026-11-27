@@ -377,6 +377,10 @@ body {
   border-color: rgba(56, 189, 248, 0.55);
 }
 
+.canvas-wrapper.editing #mazeCanvas {
+  touch-action: none;
+}
+
 #mazeCanvas {
   display: block;
 }
@@ -523,7 +527,7 @@ body {
 .swatch-frontier { background: #fbbf24; }
 .swatch-path { background: #facc15; }
 .swatch-player { background: #fbbf24; border-radius: 50%; }
-.swatch-optimal { background: #34d399; }
+.swatch-optimal { background: repeating-linear-gradient(90deg, #f472b6 0 4px, transparent 4px 6px); border: 1px solid #f472b6; }
 
 /* Sidebar */
 .sidebar {
@@ -811,6 +815,7 @@ kbd {
   color: #e2e8f0;
   font-size: 0.9rem;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .dpad-btn:hover { background: rgba(56, 189, 248, 0.2); border-color: var(--cyan); }
@@ -921,21 +926,37 @@ kbd {
 
 .hidden { display: none !important; }
 
-/* Tablet / Mobile fallback: allow natural scrolling on smaller viewports */
+/* Tablet / Mobile fallback: allow natural scrolling and prioritize controls right below maze */
 @media (max-width: 1020px) {
   html, body { height: auto; }
-  .app-shell { height: auto; overflow: visible; padding: 14px; }
-  .main-grid { grid-template-columns: 1fr; }
-  .canvas-wrapper { aspect-ratio: 1 / 1; }
+  .app-shell { height: auto; overflow: visible; padding: 12px; gap: 12px; }
+  .main-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .arena-panel { overflow: visible; }
+  .canvas-wrapper { flex: none; aspect-ratio: 1 / 1; width: 100%; }
+  .insight-bar { white-space: normal; overflow: visible; text-overflow: clip; align-items: flex-start; }
   .sidebar { overflow: visible; }
+  #aiControlsPanel, #manualControlsPanel { order: 1; }
+  #leaderboardPanel { order: 2; }
+  .settings-card { order: 3; }
   .settings-two-col { grid-template-columns: 1fr; }
   .controls-inline-row { grid-template-columns: 1fr; }
+  .app-shell.race-theatre .leaderboard-card { min-height: 0; }
 }
 
 @media (max-width: 640px) {
+  .app-header { gap: 10px; }
+  .mode-switcher { width: 100%; }
+  .mode-btn { flex: 1; justify-content: center; }
   .hud-strip { grid-template-columns: repeat(2, 1fr); }
   .algo-list { grid-template-columns: 1fr; }
   .race-grid { grid-template-columns: 1fr; }
+  .race-canvas-box { flex: none; aspect-ratio: 1 / 1; }
+  .race-bar-controls #backToSingleBtn { margin-left: 0; width: 100%; }
   .seed-action-row { flex-wrap: wrap; }
+  .seed-input { flex: 1 1 110px; width: auto; }
+  .seed-action-row #generateMazeBtn { flex: 1 1 100%; margin-left: 0; }
   .manual-mid-row { grid-template-columns: 1fr; justify-items: center; }
+  .manual-side-info { width: 100%; }
+  .dpad { grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 48px); gap: 7px; }
+  .dpad-btn { font-size: 1.05rem; }
 }

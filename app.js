@@ -9,7 +9,7 @@
       id: "bfs",
       name: "BFS 廣度優先",
       fullName: "BFS 廣度優先搜尋",
-      dsName: "佇列 (Queue)",
+      dsName: "佇列 (先進先出)",
       dotClass: "algo-bfs",
       exploredFill: "rgba(56, 189, 248, 0.26)",
       frontierFill: "rgba(251, 191, 36, 0.78)",
@@ -21,7 +21,7 @@
       id: "dfs",
       name: "DFS 深度優先",
       fullName: "DFS 深度優先搜尋",
-      dsName: "堆疊 (Stack)",
+      dsName: "堆疊 (後進先出)",
       dotClass: "algo-dfs",
       exploredFill: "rgba(251, 113, 133, 0.25)",
       frontierFill: "rgba(251, 191, 36, 0.78)",
@@ -33,7 +33,7 @@
       id: "astar",
       name: "A* 搜尋演算法",
       fullName: "A* 搜尋演算法",
-      dsName: "優先佇列 (Min-Heap)",
+      dsName: "優先佇列 (成本+估距)",
       dotClass: "algo-astar",
       exploredFill: "rgba(52, 211, 153, 0.25)",
       frontierFill: "rgba(56, 189, 248, 0.78)",
@@ -1029,21 +1029,8 @@
   function drawManualOverlay(c, padding, cellSize) {
     const m = state.manual;
 
-    if (m.showOptimal && m.optimalResult && m.optimalResult.found) {
-      drawPathRibbon(
-        c,
-        padding,
-        cellSize,
-        m.optimalResult.path,
-        m.optimalResult.path.length,
-        "#34d399",
-        "rgba(52, 211, 153, 0.7)",
-        0.8
-      );
-    }
-
     c.save();
-    c.fillStyle = "rgba(251, 191, 36, 0.16)";
+    c.fillStyle = "rgba(251, 191, 36, 0.14)";
     const inset = Math.max(1, cellSize * 0.12);
     for (const key of m.visitedSet) {
       const [rStr, cStr] = key.split(",");
@@ -1057,7 +1044,22 @@
     c.restore();
 
     if (m.trail.length > 1) {
-      drawPathRibbon(c, padding, cellSize, m.trail, m.trail.length, "#fbbf24", "rgba(251, 191, 36, 0.55)", 0.9);
+      drawPathRibbon(c, padding, cellSize, m.trail, m.trail.length, "#fbbf24", "rgba(251, 191, 36, 0.45)", 0.72);
+    }
+
+    // Draw optimal AI path ON TOP as a high-contrast dashed neon-pink line so overlapping paths stay distinct
+    if (m.showOptimal && m.optimalResult && m.optimalResult.found) {
+      drawPathRibbon(
+        c,
+        padding,
+        cellSize,
+        m.optimalResult.path,
+        m.optimalResult.path.length,
+        "#f472b6",
+        "rgba(244, 114, 182, 0.8)",
+        1,
+        { dashed: true, widthScale: 0.56 }
+      );
     }
 
     const px = padding + (m.c + 0.5) * cellSize;
@@ -1082,16 +1084,19 @@
     c.restore();
   }
 
-  function drawPathRibbon(c, padding, cellSize, path, count, color, glowColor, alpha = 1) {
+  function drawPathRibbon(c, padding, cellSize, path, count, color, glowColor, alpha = 1, options = {}) {
     if (count < 1) return;
     c.save();
     c.globalAlpha = alpha;
     c.strokeStyle = color;
     c.shadowColor = glowColor;
     c.shadowBlur = Math.max(4, cellSize * 0.28);
-    c.lineWidth = Math.max(2, cellSize * 0.25);
+    c.lineWidth = Math.max(2, cellSize * 0.25 * (options.widthScale || 1));
     c.lineCap = "round";
     c.lineJoin = "round";
+    if (options.dashed) {
+      c.setLineDash([Math.max(4, cellSize * 0.36), Math.max(3, cellSize * 0.26)]);
+    }
 
     c.beginPath();
     for (let i = 0; i < count; i++) {
@@ -1196,8 +1201,8 @@
     updatePlaybackButtons();
     updateAiHud();
     if (state.mode === "ai") {
-      setStatus("就緒：選擇演算法、編輯地形或直接同時競速", "idle");
-      setInsight("待機中：點選「開始」觀察資料結構變化，或點「一鍵同時競速」三路對決。");
+      setStatus("準備好了，請選擇演算法、編輯地形或直接同時競速", "idle");
+      setInsight("點「開始」看單一演算法怎麼找路，或點「一鍵同時競速」一起比較。");
     }
     renderCurrentView();
   }
@@ -1294,11 +1299,11 @@
     const meta = ALGO_META[track.algo];
 
     if (track.algo === "bfs") {
-      setInsight(`${meta.dsName} 待探索：${info.dsCount} 格｜正以水波狀逐層向外檢查鄰近通道`);
+      setInsight(`待檢查：${info.dsCount} 格｜先進先出，像水波一樣逐層往外找路`);
     } else if (track.algo === "dfs") {
-      setInsight(`${meta.dsName} 待回溯：${info.dsCount} 格｜沿著當前分支深入推進，撞牆才回頭`);
+      setInsight(`待回溯：${info.dsCount} 格｜後進先出，沿著這條路走到底、撞牆再回頭`);
     } else {
-      setInsight(`${meta.dsName} 候選：${info.dsCount} 格｜目前最小估價 f = g(${info.g}) + h(${info.h}) = ${info.f}`);
+      setInsight(`候選格：${info.dsCount} 格｜目前最小估價：已走成本 ${info.g} + 預估距離 ${info.h} = ${info.f}`);
     }
   }
 
@@ -1351,8 +1356,8 @@
 
     dom.raceStatusBadge.textContent = "三路同時競速中";
     dom.raceStatusBadge.className = "badge badge-cyan";
-    setStatus("三演算法同時開跑（BFS vs DFS vs A*）！", "running");
-    setInsight("同時對比：觀察 A* 如何靠距離預估直奔終點，而 BFS 逐層擴散、DFS 深入繞行。");
+    setStatus("三種演算法同時開跑（BFS vs DFS vs A*）！", "running");
+    setInsight("同時比較：看看 A* 怎麼靠預估距離往終點找路，而 BFS 逐層擴散、DFS 深入繞行。");
     updatePlaybackButtons();
     updateAiHud();
 
@@ -1733,8 +1738,8 @@
 
     if (state.mode === "manual") {
       setArenaView("single");
-      setStatus("手動挑戰就緒：按方向鍵或 WASD 移動", "idle");
-      setInsight("手動模式：試著找出成本最低的路徑，完成後將與 A* 演算法直接對比！");
+      setStatus("準備好了，請按方向鍵或 WASD 移動", "idle");
+      setInsight("試著找出成本最低的路徑，完成後會跟電腦最佳路線比較！");
     }
     renderCurrentView();
   }
@@ -2047,6 +2052,7 @@
 
     dom.canvas.addEventListener("pointerdown", (e) => {
       if (state.mode !== "ai" || state.brush === "none" || state.animStatus === "running") return;
+      if (e.cancelable) e.preventDefault();
       state.isPainting = true;
       const cell = getCanvasCellFromPointer(e);
       if (cell) applyBrushAtCell(cell.r, cell.c);
@@ -2054,6 +2060,7 @@
 
     dom.canvas.addEventListener("pointermove", (e) => {
       if (!state.isPainting || state.brush === "none") return;
+      if (e.cancelable) e.preventDefault();
       const cell = getCanvasCellFromPointer(e);
       if (cell) applyBrushAtCell(cell.r, cell.c);
     });
