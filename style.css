@@ -353,6 +353,8 @@ body {
 .brush-btn.active { background: rgba(56, 189, 248, 0.2); color: #ffffff; border-color: var(--cyan); }
 .brush-btn[data-brush="swamp"].active { background: rgba(217, 119, 6, 0.25); border-color: var(--amber); color: #fde68a; }
 .brush-btn[data-brush="wall"].active { background: rgba(148, 163, 184, 0.24); border-color: #cbd5e1; }
+.brush-btn[data-brush="start"].active { background: rgba(56, 189, 248, 0.24); border-color: var(--cyan); color: #e0f2fe; }
+.brush-btn[data-brush="goal"].active { background: rgba(52, 211, 153, 0.24); border-color: var(--emerald); color: #d1fae5; }
 
 .btn-mini {
   padding: 3px 8px;

@@ -59,9 +59,11 @@
   const state = {
     mode: "ai", // "ai" | "manual"
     size: 20,
-    preset: "random", // "random" | "utrap" | "swamp"
+    preset: "random", // "random" | "obstacles" | "swamp"
     seed: 2026,
     grid: [],
+    start: { r: 0, c: 0 },
+    goal: { r: 19, c: 19 },
 
     selectedAlgo: "astar",
     speed: 50,
@@ -222,21 +224,18 @@
     };
   }
 
-  function hashSeedText(raw) {
-    const cleaned = String(raw || "").trim().toUpperCase().replace(/^G2-/, "");
-    if (/^\d+$/.test(cleaned)) {
-      return Math.max(1, Number(cleaned) % 999999);
-    }
-    let h = 2166136261;
-    for (let i = 0; i < cleaned.length; i++) {
-      h ^= cleaned.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return (h >>> 0) % 999999 || 1001;
+  function parseSeedNumber(raw) {
+    const cleaned = String(raw || "").trim().toUpperCase().replace(/^#/, "");
+    if (!/^\d+$/.test(cleaned)) return null;
+    return Math.min(9999, Math.max(1, Number(cleaned)));
   }
 
   function randomSeed() {
-    return 1000 + Math.floor(Math.random() * 9000);
+    return 1 + Math.floor(Math.random() * 9999);
+  }
+
+  function formatSeedCode(seed) {
+    return String(Math.min(9999, Math.max(1, seed))).padStart(4, "0");
   }
 
   function shuffle(arr, rng) {
@@ -340,47 +339,21 @@
     return grid;
   }
 
-  function generateUTrapPreset() {
+  function generateObstaclesPreset() {
     const n = 20;
     const grid = createEmptyGrid(n, true);
 
-    // Classic U-shaped wall pocket facing top-left toward (0,0)
-    for (let r = 4; r <= 14; r++) {
-      grid[r][14].type = "wall";
-    }
-    for (let c = 5; c <= 14; c++) {
-      grid[4][c].type = "wall";
-      grid[14][c].type = "wall";
-    }
-
-    // Internal dead-end corridor ridges inside the U-pocket so DFS hits real walls instead of zig-zagging in open space
-    for (let c = 6; c <= 13; c++) {
-      grid[6][c].type = "wall";
-      grid[8][c].type = "wall";
-      grid[10][c].type = "wall";
-      grid[12][c].type = "wall";
-    }
-
-    // Block the empty left-edge shortcut and seal the lower-left lip so DFS explores inside the U-pocket
-    for (let c = 0; c <= 4; c++) {
-      grid[11][c].type = "wall";
-    }
-    for (let r = 12; r <= 14; r++) {
-      grid[r][4].type = "wall";
-    }
-
-    // Left divider and bottom partial obstacles
-    for (let r = 0; r <= 7; r++) {
-      if (r !== 3) grid[r][3].type = "wall";
-    }
-    // Small inner dividers in left entry strip so it feels like a real corridor
-    grid[2][1].type = "wall";
-    grid[5][1].type = "wall";
-    grid[8][1].type = "wall";
-
-    for (let c = 10; c <= 17; c++) {
-      if (c !== 15) grid[17][c].type = "wall";
-    }
+    // Scattered island walls in an open arena so A* navigates like a guided beam
+    for (let r = 2; r <= 7; r++) grid[r][6].type = "wall";
+    for (let c = 2; c <= 6; c++) grid[7][c].type = "wall";
+    for (let c = 9; c <= 14; c++) grid[4][c].type = "wall";
+    for (let r = 8; r <= 13; r++) grid[r][10].type = "wall";
+    for (let c = 10; c <= 15; c++) grid[10][c].type = "wall";
+    for (let r = 13; r <= 17; r++) grid[r][15].type = "wall";
+    for (let c = 0; c <= 4; c++) grid[12][c].type = "wall";
+    for (let r = 15; r <= 19; r++) grid[r][11].type = "wall";
+    for (let r = 0; r <= 2; r++) grid[r][10].type = "wall";
+    for (let c = 16; c <= 19; c++) grid[7][c].type = "wall";
 
     return grid;
   }
@@ -444,16 +417,16 @@
     return grid[r][c].type === "swamp" ? SWAMP_COST : 1;
   }
 
-  function verifyPathExists(grid, n) {
-    if (grid[0][0].type === "wall" || grid[n - 1][n - 1].type === "wall") return false;
+  function verifyPathExists(grid, n, start = { r: 0, c: 0 }, goal = { r: n - 1, c: n - 1 }) {
+    if (grid[start.r][start.c].type === "wall" || grid[goal.r][goal.c].type === "wall") return false;
     const seen = Array.from({ length: n }, () => Array(n).fill(false));
-    const queue = [{ r: 0, c: 0 }];
-    seen[0][0] = true;
+    const queue = [{ r: start.r, c: start.c }];
+    seen[start.r][start.c] = true;
     let head = 0;
 
     while (head < queue.length) {
       const { r, c } = queue[head++];
-      if (r === n - 1 && c === n - 1) return true;
+      if (r === goal.r && c === goal.c) return true;
       for (const dir of DIRS) {
         if (canPass(grid, n, r, c, dir)) {
           const nr = r + dir.dr;
@@ -545,15 +518,17 @@
     return cost;
   }
 
-  function runBFS(grid, n, recordTrace = true) {
-    const goalR = n - 1;
-    const goalC = n - 1;
+  function runBFS(grid, n, recordTrace = true, start = { r: 0, c: 0 }, goal = { r: n - 1, c: n - 1 }) {
+    const startR = start.r;
+    const startC = start.c;
+    const goalR = goal.r;
+    const goalC = goal.c;
     const visited = Array.from({ length: n }, () => Array(n).fill(false));
     const parent = new Map();
-    const queue = [{ r: 0, c: 0 }];
+    const queue = [{ r: startR, c: startC }];
     let head = 0;
 
-    visited[0][0] = true;
+    visited[startR][startC] = true;
     const steps = recordTrace ? [] : null;
     let exploredCount = 0;
     let found = false;
@@ -610,12 +585,12 @@
     };
   }
 
-  function runDFS(grid, n, recordTrace = true) {
-    const goalR = n - 1;
-    const goalC = n - 1;
+  function runDFS(grid, n, recordTrace = true, start = { r: 0, c: 0 }, goal = { r: n - 1, c: n - 1 }) {
+    const goalR = goal.r;
+    const goalC = goal.c;
     const visited = Array.from({ length: n }, () => Array(n).fill(false));
     const parent = new Map();
-    const stack = [{ r: 0, c: 0 }];
+    const stack = [{ r: start.r, c: start.c }];
 
     const steps = recordTrace ? [] : null;
     let exploredCount = 0;
@@ -675,9 +650,11 @@
     };
   }
 
-  function runAStar(grid, n, recordTrace = true) {
-    const goalR = n - 1;
-    const goalC = n - 1;
+  function runAStar(grid, n, recordTrace = true, start = { r: 0, c: 0 }, goal = { r: n - 1, c: n - 1 }) {
+    const startR = start.r;
+    const startC = start.c;
+    const goalR = goal.r;
+    const goalC = goal.c;
     const heuristic = (r, c) => Math.abs(goalR - r) + Math.abs(goalC - c);
 
     const gScore = Array.from({ length: n }, () => Array(n).fill(Infinity));
@@ -689,9 +666,9 @@
       return a.h - b.h;
     });
 
-    gScore[0][0] = 0;
-    const h0 = heuristic(0, 0);
-    pq.push({ r: 0, c: 0, g: 0, h: h0, f: h0 });
+    gScore[startR][startC] = 0;
+    const h0 = heuristic(startR, startC);
+    pq.push({ r: startR, c: startC, g: 0, h: h0, f: h0 });
 
     const steps = recordTrace ? [] : null;
     let exploredCount = 0;
@@ -765,7 +742,7 @@
   function executeAlgorithmTimed(algoId) {
     const runner = algoId === "bfs" ? runBFS : algoId === "dfs" ? runDFS : runAStar;
     const t0 = performance.now();
-    const result = runner(state.grid, state.size, true);
+    const result = runner(state.grid, state.size, true, state.start, state.goal);
     const t1 = performance.now();
     let elapsedMs = t1 - t0;
 
@@ -773,7 +750,7 @@
       const iterations = 25;
       const bt0 = performance.now();
       for (let i = 0; i < iterations; i++) {
-        runner(state.grid, state.size, false);
+        runner(state.grid, state.size, false, state.start, state.goal);
       }
       const bt1 = performance.now();
       elapsedMs = (bt1 - bt0) / iterations;
@@ -923,8 +900,8 @@
     }
 
     // 3. Start & Goal markers
-    drawTerminalCell(c, padding, cellSize, 0, 0, "#38bdf8", "起");
-    drawTerminalCell(c, padding, cellSize, n - 1, n - 1, "#34d399", "終");
+    drawTerminalCell(c, padding, cellSize, state.start.r, state.start.c, "#38bdf8", "起");
+    drawTerminalCell(c, padding, cellSize, state.goal.r, state.goal.c, "#34d399", "終");
 
     // 4. Maze walls
     drawWalls(c, padding, cellSize, n);
@@ -1662,7 +1639,31 @@
 
   function applyBrushAtCell(r, c) {
     const n = state.size;
-    if ((r === 0 && c === 0) || (r === n - 1 && c === n - 1)) return;
+    if (state.brush === "start") {
+      if (r === state.goal.r && c === state.goal.c) return;
+      if (r === state.start.r && c === state.start.c) return;
+      state.grid[r][c].type = "normal";
+      state.start = { r, c };
+      resetAiState(false);
+      resetManualChallenge();
+      setStatus(`已設定新起點 (${r + 1}, ${c + 1})`, "idle");
+      renderCurrentView();
+      return;
+    }
+
+    if (state.brush === "goal") {
+      if (r === state.start.r && c === state.start.c) return;
+      if (r === state.goal.r && c === state.goal.c) return;
+      state.grid[r][c].type = "normal";
+      state.goal = { r, c };
+      resetAiState(false);
+      resetManualChallenge();
+      setStatus(`已設定新終點 (${r + 1}, ${c + 1})`, "idle");
+      renderCurrentView();
+      return;
+    }
+
+    if ((r === state.start.r && c === state.start.c) || (r === state.goal.r && c === state.goal.c)) return;
     const cell = state.grid[r][c];
     let changed = false;
 
@@ -1734,12 +1735,12 @@
   function resetManualChallenge() {
     stopLoop();
     const m = state.manual;
-    m.r = 0;
-    m.c = 0;
+    m.r = state.start.r;
+    m.c = state.start.c;
     m.steps = 0;
     m.cost = 0;
-    m.trail = [{ r: 0, c: 0 }];
-    m.visitedSet = new Set(["0,0"]);
+    m.trail = [{ r: state.start.r, c: state.start.c }];
+    m.visitedSet = new Set([cellKey(state.start.r, state.start.c)]);
     m.started = false;
     m.startTime = 0;
     m.elapsedMs = 0;
@@ -1764,8 +1765,7 @@
 
   function updateManualHud() {
     const m = state.manual;
-    const n = state.size;
-    const dist = Math.abs(n - 1 - m.r) + Math.abs(n - 1 - m.c);
+    const dist = Math.abs(state.goal.r - m.r) + Math.abs(state.goal.c - m.c);
 
     dom.manualSteps.textContent = m.cost !== m.steps ? `${m.steps} 步 / 成本 ${m.cost}` : `${m.steps} 步`;
     dom.manualTimer.textContent = `${(m.elapsedMs / 1000).toFixed(2)} 秒`;
@@ -1829,7 +1829,7 @@
     updateManualHud();
     renderCurrentView();
 
-    if (m.r === n - 1 && m.c === n - 1) {
+    if (m.r === state.goal.r && m.c === state.goal.c) {
       completeManualChallenge();
     }
   }
@@ -1849,7 +1849,14 @@
     const efficiency = optCost > 0 ? Math.min(100, Math.round((optCost / m.cost) * 100)) : 100;
     const sec = m.elapsedMs / 1000;
 
-    saveBestRecord(state.size, m.cost, m.steps, sec);
+    const isDefaultEndpoints =
+      state.start.r === 0 &&
+      state.start.c === 0 &&
+      state.goal.r === state.size - 1 &&
+      state.goal.c === state.size - 1;
+    if (isDefaultEndpoints) {
+      saveBestRecord(state.size, m.cost, m.steps, sec);
+    }
     renderBestRecordBadge();
 
     dom.manualOptimalHint.textContent = `成本 ${optCost}`;
@@ -1912,11 +1919,11 @@
   }
 
   function buildMazeFromState() {
-    if (state.preset === "utrap") {
+    if (state.preset === "obstacles") {
       state.size = 20;
-      state.grid = generateUTrapPreset();
-      dom.mazeSeedMeta.textContent = "關卡 U-TRAP";
-      dom.seedInput.value = "U-TRAP";
+      state.grid = generateObstaclesPreset();
+      dom.mazeSeedMeta.textContent = "關卡 ISLAND";
+      dom.seedInput.value = "ISLAND";
     } else if (state.preset === "swamp") {
       state.size = 20;
       state.grid = generateSwampPreset();
@@ -1924,24 +1931,27 @@
       dom.seedInput.value = "SWAMP";
     } else {
       state.grid = generateRandomMaze(state.size, state.seed);
-      dom.mazeSeedMeta.textContent = `關卡 #${state.seed}`;
-      dom.seedInput.value = String(state.seed);
+      const codeStr = formatSeedCode(state.seed);
+      dom.mazeSeedMeta.textContent = `關卡 #${codeStr}`;
+      dom.seedInput.value = codeStr;
     }
 
     updatePresetButtonsUI();
+    state.start = { r: 0, c: 0 };
+    state.goal = { r: state.size - 1, c: state.size - 1 };
     dom.mazeMeta.textContent = `尺寸：${state.size} × ${state.size}`;
     resetAiState(false);
     resetManualChallenge();
 
     if (state.mode === "ai") {
-      if (state.preset === "utrap") {
-        setStatus("已載入「U 型陷阱」示範關卡", "idle");
-        setInsight("示範重點：觀察 DFS 容易鑽進 U 型口袋，而 BFS / A* 如何繞過障礙找到出口。");
+      if (state.preset === "obstacles") {
+        setStatus("已載入「散落障礙」示範關卡", "idle");
+        setInsight("示範重點：觀察 A* 如何精準繞開障礙直奔終點，而 BFS 幾乎淹滿整張地圖！");
       } else if (state.preset === "swamp") {
         setStatus("已載入「泥沼捷徑」示範關卡（泥沼每格成本 ×5）", "idle");
         setInsight("示範重點：點「一鍵同時競速」看 BFS 踩進泥沼 vs A* 聰明繞道省成本！");
       } else {
-        setStatus(`已生成 ${state.size}×${state.size} 迷宮（代碼 #${state.seed}）`, "idle");
+        setStatus(`已生成 ${state.size}×${state.size} 迷宮（代碼 #${formatSeedCode(state.seed)}）`, "idle");
       }
     }
     renderCurrentView();
@@ -1956,8 +1966,11 @@
     const preset = params.get("preset");
 
     if ([10, 20, 40].includes(s)) state.size = s;
-    if (["random", "utrap", "swamp"].includes(preset)) state.preset = preset;
-    if (seed) state.seed = hashSeedText(seed);
+    if (["random", "obstacles", "swamp"].includes(preset)) state.preset = preset;
+    if (seed) {
+      const parsed = parseSeedNumber(seed);
+      if (parsed !== null) state.seed = parsed;
+    }
     return true;
   }
 
@@ -2019,16 +2032,38 @@
       buildMazeFromState();
     });
 
+    dom.seedInput.addEventListener("input", () => {
+      const raw = dom.seedInput.value;
+      if (/^#?\d+$/.test(raw)) {
+        const hasHash = raw.startsWith("#");
+        const digits = raw.replace(/\D/g, "").slice(0, 4);
+        dom.seedInput.value = hasHash ? `#${digits}` : digits;
+      }
+    });
+
+    dom.seedInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        dom.loadSeedBtn.click();
+      }
+    });
+
     dom.loadSeedBtn.addEventListener("click", () => {
       const val = dom.seedInput.value.trim().toUpperCase();
       if (!val) return;
-      if (val === "U-TRAP") {
-        state.preset = "utrap";
+      if (val === "ISLAND") {
+        state.preset = "obstacles";
       } else if (val === "SWAMP") {
         state.preset = "swamp";
       } else {
+        const parsed = parseSeedNumber(val);
+        if (parsed === null) {
+          setStatus("請輸入 0001～9999 的數字代碼", "idle");
+          dom.seedInput.value = formatSeedCode(state.seed);
+          return;
+        }
         state.preset = "random";
-        state.seed = hashSeedText(val);
+        state.seed = parsed;
       }
       buildMazeFromState();
     });
