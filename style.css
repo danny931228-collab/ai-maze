@@ -68,7 +68,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -77,6 +78,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .brand-icon {
@@ -171,6 +173,10 @@ body {
   grid-template-columns: minmax(420px, 1.05fr) 1fr;
   gap: 12px;
   align-items: stretch;
+}
+
+.main-grid > * {
+  min-width: 0;
 }
 
 .card {
@@ -928,13 +934,13 @@ kbd {
 
 /* Tablet / Mobile fallback: allow natural scrolling and prioritize controls right below maze */
 @media (max-width: 1020px) {
-  html, body { height: auto; }
-  .app-shell { height: auto; overflow: visible; padding: 12px; gap: 12px; }
-  .main-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
-  .arena-panel { overflow: visible; }
+  html, body { height: auto; overflow-x: hidden; }
+  .app-shell { height: auto; width: 100%; overflow: visible; overflow-x: hidden; padding: 12px; gap: 12px; }
+  .main-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  .arena-panel { overflow: visible; width: 100%; }
   .canvas-wrapper { flex: none; aspect-ratio: 1 / 1; width: 100%; }
   .insight-bar { white-space: normal; overflow: visible; text-overflow: clip; align-items: flex-start; }
-  .sidebar { overflow: visible; }
+  .sidebar { overflow: visible; width: 100%; }
   #aiControlsPanel, #manualControlsPanel { order: 1; }
   #leaderboardPanel { order: 2; }
   .settings-card { order: 3; }
@@ -944,9 +950,11 @@ kbd {
 }
 
 @media (max-width: 640px) {
-  .app-header { gap: 10px; }
-  .mode-switcher { width: 100%; }
-  .mode-btn { flex: 1; justify-content: center; }
+  .app-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .brand { width: 100%; }
+  .brand-text { flex: 1; min-width: 0; gap: 4px; }
+  .mode-switcher { width: 100%; display: flex; }
+  .mode-btn { flex: 1; justify-content: center; padding: 8px 8px; }
   .hud-strip { grid-template-columns: repeat(2, 1fr); }
   .algo-list { grid-template-columns: 1fr; }
   .race-grid { grid-template-columns: 1fr; }
