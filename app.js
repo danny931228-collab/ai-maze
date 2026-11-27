@@ -353,10 +353,31 @@
       grid[14][c].type = "wall";
     }
 
-    // Additional partial dividers to create interesting exploration choices
+    // Internal dead-end corridor ridges inside the U-pocket so DFS hits real walls instead of zig-zagging in open space
+    for (let c = 6; c <= 13; c++) {
+      grid[6][c].type = "wall";
+      grid[8][c].type = "wall";
+      grid[10][c].type = "wall";
+      grid[12][c].type = "wall";
+    }
+
+    // Block the empty left-edge shortcut and seal the lower-left lip so DFS explores inside the U-pocket
+    for (let c = 0; c <= 4; c++) {
+      grid[11][c].type = "wall";
+    }
+    for (let r = 12; r <= 14; r++) {
+      grid[r][4].type = "wall";
+    }
+
+    // Left divider and bottom partial obstacles
     for (let r = 0; r <= 7; r++) {
       if (r !== 3) grid[r][3].type = "wall";
     }
+    // Small inner dividers in left entry strip so it feels like a real corridor
+    grid[2][1].type = "wall";
+    grid[5][1].type = "wall";
+    grid[8][1].type = "wall";
+
     for (let c = 10; c <= 17; c++) {
       if (c !== 15) grid[17][c].type = "wall";
     }
@@ -368,7 +389,7 @@
     const n = 20;
     const grid = createEmptyGrid(n, true);
 
-    // Start with all wall blocks, then carve a trunk + two distinct paths + dead-end branches
+    // Start with all wall blocks, then carve a trunk + swamp shortcut + clean detour + dead-end
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         grid[r][c].type = "wall";
@@ -379,21 +400,21 @@
       grid[r][c].type = type;
     };
 
-    // 1. Trunk from Start (0,0) -> (0,8) -> Fork (8,8) [16 steps]
-    for (let c = 0; c <= 8; c++) carve(0, c);
-    for (let r = 1; r <= 8; r++) carve(r, 8);
+    // 1. Trunk from Start (0,0) -> down c=0 to (8,0) -> right r=8 to Fork (8,8) [16 steps]
+    for (let r = 0; r <= 8; r++) carve(r, 0);
+    for (let c = 1; c <= 8; c++) carve(8, c);
 
-    // 2. Shortcut from (8,8) -> (8,17) -> (17,17) [18 steps, 6 swamp tiles => cost 42]
-    for (let c = 9; c <= 17; c++) {
-      const isSwamp = c >= 10 && c <= 15;
-      carve(8, c, isSwamp ? "swamp" : "normal");
+    // 2. Swamp Shortcut from Fork (8,8) -> down c=8 through 6 swamp tiles -> (17,8) -> (17,17) [18 steps, cost 42]
+    for (let r = 9; r <= 17; r++) {
+      const isSwamp = r >= 10 && r <= 15;
+      carve(r, 8, isSwamp ? "swamp" : "normal");
     }
-    for (let r = 9; r <= 17; r++) carve(r, 17);
+    for (let c = 9; c <= 17; c++) carve(17, c);
 
-    // 3. Clean Detour from (8,8) -> (8,2) -> (17,2) -> (17,17) [30 steps, all normal => cost 30]
-    for (let c = 2; c <= 7; c++) carve(8, c);
-    for (let r = 9; r <= 17; r++) carve(r, 2);
-    for (let c = 3; c <= 16; c++) carve(17, c);
+    // 3. Clean Detour from Fork (8,8) -> up c=8 to (2,8) -> right r=2 to (2,17) -> down c=17 to (17,17) [30 steps, cost 30]
+    for (let r = 2; r <= 7; r++) carve(r, 8);
+    for (let c = 9; c <= 17; c++) carve(2, c);
+    for (let r = 3; r <= 16; r++) carve(r, 17);
 
     // 4. Tail from (17,17) -> (17,19) -> Goal (19,19) [4 steps]
     carve(17, 18);
@@ -401,13 +422,11 @@
     carve(18, 19);
     carve(19, 19);
 
-    // 5. Safe dead-end branches (never bridging the two routes) so DFS explores meaningfully
-    for (let r = 1; r <= 5; r++) carve(r, 4);
-    for (let c = 1; c <= 4; c++) carve(1, c);
-    for (let c = 9; c <= 15; c++) carve(3, c);
-    for (let r = 1; r <= 3; r++) carve(r, 10);
-    for (let r = 11; r <= 14; r++) carve(r, 6);
-    for (let c = 3; c <= 6; c++) carve(11, c);
+    // 5. Left-branching dead-end off the swamp corridor so DFS explores it & hits a wall while A* avoids the swamp entirely
+    for (let c = 3; c <= 7; c++) carve(12, c);
+    for (let r = 12; r <= 15; r++) carve(r, 3);
+    for (let c = 1; c <= 4; c++) carve(4, c);
+    for (let r = 1; r <= 4; r++) carve(r, 4);
 
     return grid;
   }
@@ -597,7 +616,6 @@
     const visited = Array.from({ length: n }, () => Array(n).fill(false));
     const parent = new Map();
     const stack = [{ r: 0, c: 0 }];
-    const dfsDirs = [DIRS[1], DIRS[2], DIRS[3], DIRS[0]];
 
     const steps = recordTrace ? [] : null;
     let exploredCount = 0;
@@ -623,7 +641,7 @@
         break;
       }
 
-      for (const dir of dfsDirs) {
+      for (const dir of DIRS) {
         if (canPass(grid, n, curr.r, curr.c, dir)) {
           const nr = curr.r + dir.dr;
           const nc = curr.c + dir.dc;
@@ -1301,7 +1319,7 @@
     if (track.algo === "bfs") {
       setInsight(`待檢查：${info.dsCount} 格｜先進先出，像水波一樣逐層往外找路`);
     } else if (track.algo === "dfs") {
-      setInsight(`待回溯：${info.dsCount} 格｜後進先出，沿著這條路走到底、撞牆再回頭`);
+      setInsight(`待回溯：${info.dsCount} 格｜後進先出，沿這條分支深入探索、遇死路再回頭`);
     } else {
       setInsight(`候選格：${info.dsCount} 格｜目前最小估價：已走成本 ${info.g} + 預估距離 ${info.h} = ${info.f}`);
     }
