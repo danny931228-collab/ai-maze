@@ -497,7 +497,7 @@ body {
 .app-shell.race-theatre .leaderboard-card {
   flex: none;
   padding: 9px 14px;
-  min-height: 170px;
+  height: 192px;
 }
 
 .app-shell.race-theatre .leaderboard-card .card-header {
@@ -946,7 +946,7 @@ kbd {
   .settings-card { order: 3; }
   .settings-two-col { grid-template-columns: 1fr; }
   .controls-inline-row { grid-template-columns: 1fr; }
-  .app-shell.race-theatre .leaderboard-card { min-height: 0; }
+  .app-shell.race-theatre .leaderboard-card { height: auto; min-height: 0; }
 }
 
 @media (max-width: 640px) {
