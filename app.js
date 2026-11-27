@@ -67,8 +67,9 @@
 
     selectedAlgo: "astar",
     speed: 50,
-    brush: "none", // "none" | "wall" | "swamp" | "clear"
+    brush: "none", // "none" | "wall" | "swamp" | "clear" | "start" | "goal"
     isPainting: false,
+    hasCustomEdits: false,
 
     // View & Playback
     viewMode: "single", // "single" | "race"
@@ -1165,7 +1166,7 @@
     const isRace = viewMode === "race" && state.mode === "ai";
     dom.appShell.classList.toggle("race-theatre", isRace);
     dom.canvasWrapper.classList.toggle("hidden", isRace);
-    dom.editorToolbar.classList.toggle("hidden", isRace || state.mode !== "ai");
+    dom.editorToolbar.classList.toggle("hidden", isRace);
     dom.raceGrid.classList.toggle("hidden", !isRace);
     dom.raceViewSwitch.classList.toggle("hidden", !isRace);
     resizeAllCanvases();
@@ -1664,6 +1665,7 @@
     }
 
     if ((r === state.start.r && c === state.start.c) || (r === state.goal.r && c === state.goal.c)) return;
+    if (state.mode === "manual" && state.brush === "wall" && r === state.manual.r && c === state.manual.c) return;
     const cell = state.grid[r][c];
     let changed = false;
 
@@ -1691,7 +1693,9 @@
     }
 
     if (changed) {
+      state.hasCustomEdits = true;
       resetAiState(false);
+      resetManualChallenge();
       renderCurrentView();
     }
   }
@@ -1854,7 +1858,7 @@
       state.start.c === 0 &&
       state.goal.r === state.size - 1 &&
       state.goal.c === state.size - 1;
-    if (isDefaultEndpoints) {
+    if (isDefaultEndpoints && !state.hasCustomEdits) {
       saveBestRecord(state.size, m.cost, m.steps, sec);
     }
     renderBestRecordBadge();
@@ -1937,6 +1941,7 @@
     }
 
     updatePresetButtonsUI();
+    state.hasCustomEdits = false;
     state.start = { r: 0, c: 0 };
     state.goal = { r: state.size - 1, c: state.size - 1 };
     dom.mazeMeta.textContent = `尺寸：${state.size} × ${state.size}`;
@@ -2098,13 +2103,15 @@
           state.grid[r][c].type = "normal";
         }
       }
+      if (state.preset !== "random") state.hasCustomEdits = true;
       resetAiState(false);
+      resetManualChallenge();
       renderCurrentView();
       setStatus("已清空所有障礙牆與泥沼地形", "idle");
     });
 
     dom.canvas.addEventListener("pointerdown", (e) => {
-      if (state.mode !== "ai" || state.brush === "none" || state.animStatus === "running") return;
+      if (state.viewMode !== "single" || state.brush === "none" || state.animStatus === "running") return;
       if (e.cancelable) e.preventDefault();
       state.isPainting = true;
       const cell = getCanvasCellFromPointer(e);
